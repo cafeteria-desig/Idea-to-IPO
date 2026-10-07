@@ -1,0 +1,234 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  name               String
+  email              String              @unique
+  password           String              @default("ipo2026")
+  token              String?             @unique
+  phone              String?
+  role               String              // "ADMIN" | "FII" | "RETAIL" | "STARTUP"
+  status             String              @default("ACTIVE") // "ACTIVE" | "BLOCKED"
+  startingCapital    Float               @default(0)
+  currentBalance     Float               @default(0)
+  totalInvested      Float               @default(0)
+  isOnline           Boolean             @default(false)
+  lastActiveAt       DateTime            @default(now())
+  startupId          String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  investments        Investment[]
+  capitalAdjustments CapitalAdjustment[]
+  holdings           Holding[]
+  orders             Order[]
+  buyTrades          Trade[]             @relation("BuyerTrades")
+  sellTrades         Trade[]             @relation("SellerTrades")
+  watchlists         Watchlist[]
+}
+
+model Startup {
+  id                      String         @id @default(cuid())
+  name                    String
+  slug                    String         @unique
+  logoUrl                 String?
+  tagLine                 String
+  industry                String
+  problem                 String
+  solution                String
+  businessModel           String
+  targetMarket            String
+  fundingAsk              Float
+  equityOffered           Float?
+  pitchSummary            String
+  pitchDeckUrl            String?
+  teamMembers             String         // Serialized JSON string: [{ name, role, avatar, bio }]
+  pitchOrder              Int            @default(1)
+  ipoStatus               String         @default("COMING_UP") // COMING_UP, PITCHING, QA, IPO_OPEN, IPO_PAUSED, IPO_CLOSED, UNDER_REVIEW, FINALIZED, DISQUALIFIED
+  totalInvestmentReceived Float          @default(0)
+  retailInvestment        Float          @default(0)
+  fiiInvestment           Float          @default(0)
+  investorCount           Int            @default(0)
+  
+  // Stock Trading Metrics
+  initialPrice            Float          @default(100)
+  currentPrice            Float          @default(100)
+  previousPrice           Float          @default(100)
+  openPrice               Float          @default(100)
+  dayHigh                 Float          @default(100)
+  dayLow                  Float          @default(100)
+  totalShares             Float          @default(1000000)
+  initialValuation        Float          @default(100000000)
+  totalVolume             Int            @default(0)
+  isSuspended             Boolean        @default(false)
+
+  investments             Investment[]
+  awards                  FinalAward[]
+  holdings                Holding[]
+  orders                  Order[]
+  trades                  Trade[]
+  priceHistory            PriceHistory[]
+  watchlists              Watchlist[]
+}
+
+model Holding {
+  id              String   @id @default(cuid())
+  userId          String
+  startupId       String
+  quantity        Int      @default(0)
+  averageBuyPrice Float    @default(0)
+  totalInvested   Float    @default(0) // quantity * averageBuyPrice
+  realizedPnL     Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startup         Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, startupId])
+}
+
+model Order {
+  id                String   @id // Format: ORD-XXXXXX
+  userId            String
+  startupId         String
+  side              String   // "BUY" | "SELL"
+  type              String   // "MARKET" | "LIMIT"
+  price             Float
+  quantity          Int
+  filledQuantity    Int      @default(0)
+  remainingQuantity Int
+  status            String   @default("OPEN") // "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "REJECTED"
+  reservedAmount    Float    @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startup           Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  buyTrades         Trade[]  @relation("BuyOrderTrades")
+  sellTrades        Trade[]  @relation("SellOrderTrades")
+}
+
+model Trade {
+  id           String   @id // Format: TRD-XXXXXX
+  startupId    String
+  buyOrderId   String?
+  sellOrderId  String?
+  buyerId      String
+  sellerId     String
+  price        Float
+  quantity     Int
+  amount       Float
+  createdAt    DateTime @default(now())
+
+  startup      Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  buyer        User     @relation("BuyerTrades", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller       User     @relation("SellerTrades", fields: [sellerId], references: [id], onDelete: Cascade)
+  buyOrder     Order?   @relation("BuyOrderTrades", fields: [buyOrderId], references: [id])
+  sellOrder    Order?   @relation("SellOrderTrades", fields: [sellOrderId], references: [id])
+}
+
+model PriceHistory {
+  id        String   @id @default(cuid())
+  startupId String
+  price     Float
+  volume    Int      @default(0)
+  timestamp DateTime @default(now())
+
+  startup   Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+
+  @@index([startupId, timestamp])
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  startupId String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startup   Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, startupId])
+}
+
+model Investment {
+  id           String   @id // Format: INV-XXXXXX
+  investorId   String
+  investorName String
+  investorType String   // "RETAIL" | "FII"
+  startupId    String
+  amount       Float
+  status       String   @default("VALID") // "VALID" | "CANCELLED" | "REVERSED" | "UNDER_REVIEW"
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  investor     User     @relation(fields: [investorId], references: [id], onDelete: Cascade)
+  startup      Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+}
+
+model CapitalAdjustment {
+  id              String   @id @default(cuid())
+  adminId         String
+  adminName       String
+  userId          String
+  userName        String
+  previousCapital Float
+  newCapital      Float
+  previousBalance Float
+  newBalance      Float
+  reason          String
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MarketState {
+  id                        String   @id @default("global")
+  isMarketActive            Boolean  @default(true)
+  activeStartupId           String?
+  hideInvestorNamesPublicly Boolean  @default(false)
+  bannerMessage             String?
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  adminId       String
+  adminName     String
+  action        String   // "FREEZE_MARKET", "RESUME_MARKET", "SET_IPO_STATUS_*", "ADJUST_CAPITAL", etc.
+  targetType    String   // "SYSTEM", "MARKET", "STARTUP", "USER", "INVESTMENT", "AWARD"
+  targetId      String
+  previousValue String?
+  newValue      String?
+  reason        String?
+  createdAt     DateTime @default(now())
+}
+
+model ActivityFeed {
+  id           String   @id @default(cuid())
+  type         String   // "INVESTMENT", "IPO_STATUS", "USER_JOINED", "ADMIN_ACTION", "TRADE"
+  message      String
+  startupName  String?
+  investorName String?
+  amount       Float?
+  isPublic     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
+
+model FinalAward {
+  id               String   @id @default(cuid())
+  awardKey         String   @unique // "CHAMPION", "MOST_FUNDED", "HIGHEST_FII", "RETAIL_CHOICE", "MOST_OVERSUBSCRIBED"
+  awardName        String
+  startupId        String?
+  startupName      String?
+  metric           String?
+  isPublic         Boolean  @default(true)
+  confirmedByAdmin Boolean  @default(false)
+  startup          Startup? @relation(fields: [startupId], references: [id])
+}

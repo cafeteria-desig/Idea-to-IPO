@@ -1,0 +1,229 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 7%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 7%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 161 100% 45%;
+    --primary-foreground: 224 71% 4%;
+
+    --secondary: 191 100% 50%;
+    --secondary-foreground: 224 71% 4%;
+
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 18%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 18%;
+    --input: 217 33% 18%;
+    --ring: 161 100% 45%;
+
+    --radius: 0.75rem;
+
+    --color-bg-base: #060810;
+    --color-accent-emerald: #00e599;
+    --color-accent-cyan: #00c8ff;
+    --color-accent-amber: #f59e0b;
+    --color-accent-gold: #e6c687;
+    --color-accent-rose: #ef4444;
+  }
+
+  .light {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 161 100% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 191 100% 40%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 40% 92%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 40% 92%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 85%;
+    --input: 214 32% 85%;
+    --ring: 161 100% 35%;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    background-color: rgba(255, 255, 255, 0.035);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 1.25rem;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+  }
+
+  .glass-panel-premium {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.015) 100%);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 1.25rem;
+    box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .glass-panel-glow {
+    background: linear-gradient(135deg, rgba(0, 229, 153, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(0, 229, 153, 0.25);
+    box-shadow: 0 0 35px -5px rgba(0, 229, 153, 0.12), 0 16px 40px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(0, 229, 153, 0.2);
+    border-radius: 1.25rem;
+  }
+
+  .glass-input {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .glass-input:focus {
+    border-color: rgba(0, 229, 153, 0.5);
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 15px -2px rgba(0, 229, 153, 0.25);
+    outline: none;
+  }
+
+  .font-mono-num {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-feature-settings: 'tnum' on, 'lnum' on;
+  }
+
+  .shimmer-sweep {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shimmer-sweep::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      60deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.12) 50%,
+      transparent 70%
+    );
+    transform: rotate(30deg) translateX(-100%);
+    transition: none;
+  }
+
+  .shimmer-sweep:hover::after {
+    animation: shimmerSweep 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes shimmerSweep {
+    0% {
+      transform: rotate(30deg) translateX(-100%);
+    }
+    100% {
+      transform: rotate(30deg) translateX(100%);
+    }
+  }
+
+  /* Mobile Native App Utilities */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .mobile-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #060810;
+  color: #f1f5f9;
+  font-family: var(--font-work-sans), 'Work Sans', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Fast-response touch targets without 300ms gesture delay */
+a, button, [role="button"], input, select, textarea {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* On mobile/touch devices: eliminate sticky :hover traps that cause 2-click delays in WebKit/iOS Safari */
+@media (hover: none) and (pointer: coarse) {
+  a, button, [role="button"] {
+    -webkit-touch-callout: none;
+  }
+}
+
+/* Custom Cyber Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #060911;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+  border: 2px solid #060911;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 153, 0.4);
+}
