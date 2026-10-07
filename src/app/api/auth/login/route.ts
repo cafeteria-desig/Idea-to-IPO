@@ -114,10 +114,10 @@ export async function POST(req: NextRequest) {
 
     setAuthCookie(response, targetUser.id);
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Login API error:", error);
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      { success: false, message: error?.message || "Internal server error" },
       { status: 500 }
     );
   }

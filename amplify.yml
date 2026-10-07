@@ -7,6 +7,7 @@ frontend:
         - npx prisma generate
     build:
       commands:
+        - env | grep -E '^DATABASE_URL=|^DIRECT_URL=' >> .env.production || true
         - npm run build
   artifacts:
     baseDirectory: .next
