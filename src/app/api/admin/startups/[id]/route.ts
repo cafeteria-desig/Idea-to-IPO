@@ -10,7 +10,8 @@ export async function DELETE(
   try {
     const { id } = params;
     const body = await req.json().catch(() => ({}));
-    const admin = await getAdminUser(req, body.adminId);
+    const adminId = body.adminId || req.nextUrl.searchParams.get("adminId") || req.headers.get("x-user-id");
+    const admin = await getAdminUser(req, adminId || undefined);
     if (!admin) {
       return NextResponse.json(
         { success: false, message: "Forbidden: Admin privileges required" },
@@ -67,6 +68,9 @@ export async function DELETE(
           reason: `Admin deleted startup team "${startup!.name}" (Pitch #${startup!.pitchOrder})`,
         },
       });
+    }, {
+      maxWait: 10000,
+      timeout: 30000,
     });
 
     return NextResponse.json({

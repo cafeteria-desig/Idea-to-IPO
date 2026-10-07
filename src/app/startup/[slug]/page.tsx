@@ -190,7 +190,7 @@ export default function StockDetailPage() {
         fetchStartupDetail();
         fetchRecentTrades();
         fetchUserHolding();
-      }, 3000);
+      }, 5000);
 
       return () => clearInterval(interval);
     }

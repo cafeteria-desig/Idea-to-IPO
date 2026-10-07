@@ -65,16 +65,18 @@ export async function getCurrentUser(request?: Request): Promise<SafeUser | null
       return null;
     }
 
-    // Non-blocking heartbeat update to avoid read failures and SQLite write locks
-    prisma.user
-      .update({
-        where: { id: user.id },
-        data: {
-          lastActiveAt: new Date(),
-          isOnline: true,
-        },
-      })
-      .catch(() => {});
+    // Non-blocking throttled heartbeat update (at most once every 60s)
+    if (!user.lastActiveAt || Date.now() - new Date(user.lastActiveAt).getTime() > 60000) {
+      prisma.user
+        .update({
+          where: { id: user.id },
+          data: {
+            lastActiveAt: new Date(),
+            isOnline: true,
+          },
+        })
+        .catch(() => {});
+    }
 
     return sanitizeUser(user);
   } catch (error) {

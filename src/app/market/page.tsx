@@ -86,7 +86,10 @@ export default function MarketTerminalPage() {
 
   useEffect(() => {
     fetchMarketData();
-    const interval = setInterval(fetchMarketData, 3000); // 3s smooth sync
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchMarketData();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 

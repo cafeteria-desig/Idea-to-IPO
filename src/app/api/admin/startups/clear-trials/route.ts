@@ -5,7 +5,8 @@ import { getAdminUser } from "@/lib/auth";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const admin = await getAdminUser(req, body.adminId);
+    const adminId = body.adminId || req.nextUrl.searchParams.get("adminId") || req.headers.get("x-user-id");
+    const admin = await getAdminUser(req, adminId || undefined);
     if (!admin) {
       return NextResponse.json(
         { success: false, message: "Forbidden: Admin privileges required" },
@@ -40,6 +41,9 @@ export async function POST(req: NextRequest) {
           reason: "Admin purged all trial teams and associated market transactions.",
         },
       });
+    }, {
+      maxWait: 10000,
+      timeout: 30000,
     });
 
     return NextResponse.json({

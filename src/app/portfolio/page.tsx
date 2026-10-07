@@ -84,7 +84,10 @@ export default function PortfolioPage() {
 
   useEffect(() => {
     fetchPortfolio();
-    const interval = setInterval(fetchPortfolio, 3500);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchPortfolio();
+    }, 6000);
     return () => clearInterval(interval);
   }, [fetchPortfolio]);
 

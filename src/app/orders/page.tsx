@@ -44,7 +44,10 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 4000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchOrders();
+    }, 6000);
     return () => clearInterval(interval);
   }, [fetchOrders]);
 

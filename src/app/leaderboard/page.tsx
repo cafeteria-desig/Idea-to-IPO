@@ -96,7 +96,10 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     fetchStartups();
-    const interval = setInterval(fetchStartups, 3000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchStartups();
+    }, 6000);
     return () => clearInterval(interval);
   }, [fetchStartups]);
 

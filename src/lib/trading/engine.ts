@@ -645,6 +645,9 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
           : `Order placed into order book at ${formatSharePrice(targetPrice)}. Awaiting matching.`,
       newBalance: updatedUser.currentBalance,
     };
+  }, {
+    maxWait: 10000,
+    timeout: 30000,
   });
 }
 
@@ -694,6 +697,9 @@ export async function cancelOrder(orderId: string, userId: string): Promise<{ su
       success: true,
       message: `Order ${order.id} cancelled successfully.`,
     };
+  }, {
+    maxWait: 10000,
+    timeout: 20000,
   });
 }
 
@@ -920,6 +926,8 @@ export async function rebalanceMarketMakerLiquidity(
     { pct: 0.020, qty: 1000000 }, // -2.0% (1,000,000 shares)
   ];
 
+  const ordersToCreate: any[] = [];
+
   const seenAskPrices = new Set<number>();
   for (const item of askOffsets) {
     const tick = basePrice < 1 ? 0.01 : 0.05;
@@ -927,20 +935,18 @@ export async function rebalanceMarketMakerLiquidity(
     if (seenAskPrices.has(askPrice)) continue;
     seenAskPrices.add(askPrice);
 
-    await db.order.create({
-      data: {
-        id: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
-        userId: systemAccount.id,
-        startupId,
-        side: "SELL",
-        type: "LIMIT",
-        price: askPrice,
-        quantity: item.qty,
-        filledQuantity: 0,
-        remainingQuantity: item.qty,
-        status: "OPEN",
-        reservedAmount: 0,
-      },
+    ordersToCreate.push({
+      id: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
+      userId: systemAccount.id,
+      startupId,
+      side: "SELL",
+      type: "LIMIT",
+      price: askPrice,
+      quantity: item.qty,
+      filledQuantity: 0,
+      remainingQuantity: item.qty,
+      status: "OPEN",
+      reservedAmount: 0,
     });
   }
 
@@ -952,41 +958,45 @@ export async function rebalanceMarketMakerLiquidity(
     if (seenBidPrices.has(bidPrice)) continue;
     seenBidPrices.add(bidPrice);
 
-    await db.order.create({
-      data: {
-        id: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
-        userId: systemAccount.id,
-        startupId,
-        side: "BUY",
-        type: "LIMIT",
-        price: bidPrice,
-        quantity: item.qty,
-        filledQuantity: 0,
-        remainingQuantity: item.qty,
-        status: "OPEN",
-        reservedAmount: bidPrice * item.qty,
-      },
+    ordersToCreate.push({
+      id: `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
+      userId: systemAccount.id,
+      startupId,
+      side: "BUY",
+      type: "LIMIT",
+      price: bidPrice,
+      quantity: item.qty,
+      filledQuantity: 0,
+      remainingQuantity: item.qty,
+      status: "OPEN",
+      reservedAmount: bidPrice * item.qty,
     });
+  }
+
+  if (ordersToCreate.length > 0) {
+    await db.order.createMany({ data: ordersToCreate });
   }
 
   // Seed baseline PriceHistory points if none exist
   const historyCount = await db.priceHistory.count({ where: { startupId } });
   if (historyCount === 0) {
-    await db.priceHistory.create({
-      data: {
-        startupId,
-        price: basePrice,
-        volume: 100,
-        timestamp: new Date(Date.now() - 3600000), // 1 hour ago
-      },
-    });
-    await db.priceHistory.create({
-      data: {
-        startupId,
-        price: basePrice,
-        volume: 150,
-        timestamp: new Date(),
-      },
+    await db.priceHistory.createMany({
+      data: [
+        {
+          id: `PH-${Math.floor(100000 + Math.random() * 900000)}`,
+          startupId,
+          price: basePrice,
+          volume: 100,
+          timestamp: new Date(Date.now() - 3600000),
+        },
+        {
+          id: `PH-${Math.floor(100000 + Math.random() * 900000)}`,
+          startupId,
+          price: basePrice,
+          volume: 150,
+          timestamp: new Date(),
+        },
+      ],
     });
   }
 }

@@ -67,7 +67,10 @@ export default function FIITerminalPage() {
 
   useEffect(() => {
     fetchStartups();
-    const interval = setInterval(fetchStartups, 4000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      fetchStartups();
+    }, 6000);
     return () => clearInterval(interval);
   }, []);
 

@@ -104,11 +104,12 @@ export default function TeamsPage() {
       fetchUserHoldings();
     }
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       fetchStartups();
       if (user?.id) {
         fetchUserHoldings();
       }
-    }, 4000);
+    }, 6000);
     return () => clearInterval(interval);
   }, [fetchStartups, fetchUserHoldings, user?.id]);
 

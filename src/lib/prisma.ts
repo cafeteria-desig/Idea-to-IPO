@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
 const defaultDatabaseUrl =
-  "postgresql://postgres.ewovxvyhwekrtyyxravp:Bhavishy%402007@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true";
+  "postgresql://postgres.ewovxvyhwekrtyyxravp:Bhavishy%402007@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=10&pool_timeout=20";
 
 export const prisma =
   globalForPrisma.prisma ??

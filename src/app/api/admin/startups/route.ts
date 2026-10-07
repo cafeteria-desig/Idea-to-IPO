@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
       adminId,
     } = body;
 
-    const admin = await getAdminUser(req, adminId);
+    const effectiveAdminId = adminId || req.nextUrl.searchParams.get("adminId") || req.headers.get("x-user-id");
+    const admin = await getAdminUser(req, effectiveAdminId || undefined);
     if (!admin) {
       return NextResponse.json(
         { success: false, message: "Forbidden: Only administrators can register startup teams." },

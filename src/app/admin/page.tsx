@@ -212,7 +212,10 @@ export default function AdminControlRoomPage() {
   useEffect(() => {
     if (user?.role === "ADMIN") {
       refreshAllAdminData();
-      const interval = setInterval(refreshAllAdminData, 4000);
+      const interval = setInterval(() => {
+        if (typeof document !== "undefined" && document.hidden) return;
+        refreshAllAdminData();
+      }, 7000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -379,7 +382,7 @@ export default function AdminControlRoomPage() {
   const handleDeleteStartup = async (startupId: string) => {
     setIsDeletingStartup(true);
     try {
-      const res = await fetch(`/api/admin/startups/${startupId}`, {
+      const res = await fetch(`/api/admin/startups/${startupId}?adminId=${user?.id || "user-admin"}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
