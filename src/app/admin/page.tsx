@@ -333,7 +333,7 @@ export default function AdminControlRoomPage() {
     setIsRegisteringTeam(true);
 
     try {
-      const res = await fetch("/api/admin/startups", {
+      const res = await fetch(`/api/admin/startups?adminId=${user?.id || "user-admin"}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -357,9 +357,16 @@ export default function AdminControlRoomPage() {
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      let data: any = {};
+      try {
+        const text = await res.text();
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { message: `Server status: HTTP ${res.status}` };
+      }
+
       if (!res.ok || !data.success) {
-        throw new Error(data.message || "Failed to register team.");
+        throw new Error(data.message || `Failed to register team (HTTP ${res.status}).`);
       }
 
       flashMessage(`🚀 Team "${data.startup?.name}" registered and live on the exchange!`);

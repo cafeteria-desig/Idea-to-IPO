@@ -192,53 +192,42 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 5. Seed initial market maker order book depth if IPO is open
-    if (newStartup.ipoStatus === "IPO_OPEN") {
+    // 5. Non-blocking background post-processing (liquidity seeding, audit logs, activity feed)
+    (async () => {
       try {
-        await seedMarketLiquidityForStartup(newStartup.id);
-      } catch (err) {
-        console.warn("Notice: Order book liquidity initialization:", err);
-      }
-    }
-
-    // 6. Ensure global market state points to this startup if none active
-    try {
-      const ms = await prisma.marketState.findUnique({ where: { id: "global" } });
-      if (!ms?.activeStartupId) {
-        await prisma.marketState.upsert({
-          where: { id: "global" },
-          update: { activeStartupId: newStartup.id },
-          create: { id: "global", isMarketActive: true, activeStartupId: newStartup.id },
+        if (newStartup.ipoStatus === "IPO_OPEN") {
+          await seedMarketLiquidityForStartup(newStartup.id);
+        }
+        const ms = await prisma.marketState.findUnique({ where: { id: "global" } });
+        if (!ms?.activeStartupId) {
+          await prisma.marketState.upsert({
+            where: { id: "global" },
+            update: { activeStartupId: newStartup.id },
+            create: { id: "global", isMarketActive: true, activeStartupId: newStartup.id },
+          });
+        }
+        await prisma.auditLog.create({
+          data: {
+            adminId: admin.id,
+            adminName: admin.name,
+            action: "REGISTER_STARTUP",
+            targetType: "STARTUP",
+            targetId: newStartup.id,
+            reason: `Registered pitch #${newStartup.pitchOrder} ${newStartup.name} (${newStartup.industry}) | Ask: ₹${newStartup.fundingAsk} | Share Value: ₹${newStartup.currentPrice} | Status: ${newStartup.ipoStatus}`,
+          },
         });
+        await prisma.activityFeed.create({
+          data: {
+            type: "IPO_STATUS",
+            message: `New venture registered: ${newStartup.name} (Pitch #${newStartup.pitchOrder}) is now ready!`,
+            startupName: newStartup.name,
+            isPublic: true,
+          },
+        });
+      } catch (bgErr) {
+        console.warn("Background registration post-processing notice:", bgErr);
       }
-    } catch (e) {
-      // Ignored
-    }
-
-    // 7. Compliance Audit Entry
-    try {
-      await prisma.auditLog.create({
-        data: {
-          adminId: admin.id,
-          adminName: admin.name,
-          action: "REGISTER_STARTUP",
-          targetType: "STARTUP",
-          targetId: newStartup.id,
-          reason: `Registered pitch #${newStartup.pitchOrder} ${newStartup.name} (${newStartup.industry}) | Ask: ₹${newStartup.fundingAsk} | Share Value: ₹${newStartup.currentPrice} | Status: ${newStartup.ipoStatus}`,
-        },
-      });
-
-      await prisma.activityFeed.create({
-        data: {
-          type: "IPO_STATUS",
-          message: `New venture registered: ${newStartup.name} (Pitch #${newStartup.pitchOrder}) is now ready!`,
-          startupName: newStartup.name,
-          isPublic: true,
-        },
-      });
-    } catch (e) {
-      // Non-critical
-    }
+    })();
 
     return NextResponse.json({
       success: true,
