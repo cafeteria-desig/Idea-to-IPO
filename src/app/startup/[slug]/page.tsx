@@ -48,8 +48,10 @@ import {
   Layers,
   ArrowUpRight,
   ShieldAlert,
+  FileText,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { TeamReportModal } from "@/components/TeamReportModal";
 import type {
   StartupItem,
   TradeItem,
@@ -74,6 +76,7 @@ export default function StockDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [tradeFeedback, setTradeFeedback] = useState<{ success: boolean; message: string } | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   // Chart Timeframe State
   const [chartRange, setChartRange] = useState<string>("1D");
@@ -84,6 +87,8 @@ export default function StockDetailPage() {
   const [userHolding, setUserHolding] = useState<HoldingItem | null>(null);
   const [isWatchlisted, setIsWatchlisted] = useState(false);
 
+  const limitPriceSetRef = React.useRef(false);
+
   // 1. Fetch Startup & Stock Details
   const fetchStartupDetail = useCallback(async () => {
     if (!slug) return;
@@ -92,7 +97,8 @@ export default function StockDetailPage() {
       if (res.ok) {
         const data = await res.json();
         setStartup(data);
-        if (limitPrice === 100 && data.currentPrice) {
+        if (!limitPriceSetRef.current && data.currentPrice) {
+          limitPriceSetRef.current = true;
           setLimitPrice(data.currentPrice);
         }
       }
@@ -101,7 +107,7 @@ export default function StockDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [slug, limitPrice]);
+  }, [slug]);
 
   // 2. Fetch Chart Data
   const fetchChartData = useCallback(async () => {
@@ -334,17 +340,26 @@ export default function StockDetailPage() {
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Market Roster
         </Link>
-        <button
-          onClick={handleToggleWatchlist}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-semibold transition-all ${
-            isWatchlisted
-              ? "border-amber-400/50 bg-amber-400/10 text-amber-300"
-              : "border-white/10 bg-white/5 text-zinc-400 hover:text-white hover:border-white/20"
-          }`}
-        >
-          <Star className={`h-3.5 w-3.5 ${isWatchlisted ? "fill-amber-400 text-amber-400" : ""}`} />
-          {isWatchlisted ? "Watchlisted" : "Add to Watchlist"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setReportModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 text-xs font-mono font-semibold transition-all shadow-sm shadow-emerald-500/10"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Investor Report & Cap Table
+          </button>
+          <button
+            onClick={handleToggleWatchlist}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-semibold transition-all ${
+              isWatchlisted
+                ? "border-amber-400/50 bg-amber-400/10 text-amber-300"
+                : "border-white/10 bg-white/5 text-zinc-400 hover:text-white hover:border-white/20"
+            }`}
+          >
+            <Star className={`h-3.5 w-3.5 ${isWatchlisted ? "fill-amber-400 text-amber-400" : ""}`} />
+            {isWatchlisted ? "Watchlisted" : "Add to Watchlist"}
+          </button>
+        </div>
       </div>
 
       {/* Main Stock Header Card */}
@@ -936,6 +951,15 @@ export default function StockDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {startup && (
+        <TeamReportModal
+          startupSlug={startup.slug}
+          startupName={startup.name}
+          open={reportModalOpen}
+          onOpenChange={setReportModalOpen}
+        />
+      )}
     </div>
   );
 }

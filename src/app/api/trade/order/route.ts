@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { executeOrder } from "@/lib/trading/engine";
+import { invalidateCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,8 @@ export async function POST(req: NextRequest) {
       quantity: numQty,
       price: numPrice,
     });
+
+    invalidateCache();
 
     return NextResponse.json(result);
   } catch (error: any) {

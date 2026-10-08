@@ -42,15 +42,20 @@ import {
   Sparkles,
   Zap,
   Layers,
+  BarChart3,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { StartupItem, HoldingItem } from "@/types";
+import { TeamReportModal } from "@/components/TeamReportModal";
 
 export default function TeamsPage() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
   const [startups, setStartups] = useState<StartupItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Founder / Team Report Modal State
+  const [reportModalStartup, setReportModalStartup] = useState<StartupItem | null>(null);
 
   // Quick Trade Modal State
   const [selectedStartup, setSelectedStartup] = useState<StartupItem | null>(null);
@@ -225,6 +230,40 @@ export default function TeamsPage() {
             </div>
           </div>
         )}
+
+        {/* Founder Portal Command Center Banner */}
+        {user && user.role === "STARTUP" && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 rounded-2xl border border-cyan-500/40 bg-gradient-to-r from-cyan-500/20 via-cyan-500/10 to-transparent p-3.5 sm:p-4 px-4 sm:px-5 backdrop-blur-2xl shadow-[0_0_25px_rgba(6,182,212,0.2)]">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 shrink-0">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div className="space-y-0.5">
+              <span className="block text-[10px] font-mono text-cyan-300 uppercase tracking-wider font-bold">
+                Founder Portal Active
+              </span>
+              <span className="text-sm font-mono font-bold text-white block">
+                {user.name}
+              </span>
+            </div>
+            {startups.length > 0 && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  const myStartup =
+                    startups.find(
+                      (s) =>
+                        s.id === (user as any).startupId ||
+                        s.name.toLowerCase().includes(user.name.toLowerCase())
+                    ) || startups[0];
+                  setReportModalStartup(myStartup);
+                }}
+                className="sm:ml-3 font-mono text-xs font-bold bg-cyan-500 text-black hover:bg-cyan-400 gap-1.5 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+              >
+                <BarChart3 className="h-3.5 w-3.5" /> Open My Company Report
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Startups Grid */}
@@ -352,29 +391,40 @@ export default function TeamsPage() {
                     </div>
                   </CardContent>
 
-                  <CardFooter className="p-6 sm:p-8 pt-0 flex items-center gap-2 border-t border-white/[0.06] mt-auto">
-                    <Button
-                      size="sm"
-                      disabled={!isOpen}
-                      onClick={() => handleOpenTradeModal(startup, "BUY")}
-                      className={`flex-1 h-11 px-5 rounded-xl font-mono text-xs font-bold transition-all ${
-                        isOpen
-                          ? "bg-gradient-to-r from-emerald-500 to-teal-400 text-black hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20"
-                          : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
-                      }`}
-                    >
-                      {isOpen ? "Quick Buy" : "Market Closed"}
-                    </Button>
-                    {isOpen && (
+                  <CardFooter className="p-6 sm:p-8 pt-0 flex flex-col gap-2.5 border-t border-white/[0.06] mt-auto">
+                    <div className="flex items-center gap-2 w-full">
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => handleOpenTradeModal(startup, "SELL")}
-                        className="flex-1 h-11 px-4 rounded-xl font-mono text-xs font-bold border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                        disabled={!isOpen}
+                        onClick={() => handleOpenTradeModal(startup, "BUY")}
+                        className={`flex-1 h-10 px-4 rounded-xl font-mono text-xs font-bold transition-all ${
+                          isOpen
+                            ? "bg-gradient-to-r from-emerald-500 to-teal-400 text-black hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20"
+                            : "bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700"
+                        }`}
                       >
-                        {ownedSharesCount > 0 ? `Quick Sell (${ownedSharesCount})` : "Quick Sell"}
+                        {isOpen ? "Quick Buy" : "Market Closed"}
                       </Button>
-                    )}
+                      {isOpen && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenTradeModal(startup, "SELL")}
+                          className="flex-1 h-10 px-4 rounded-xl font-mono text-xs font-bold border-rose-500/30 text-rose-400 hover:bg-rose-500/10"
+                        >
+                          {ownedSharesCount > 0 ? `Quick Sell (${ownedSharesCount})` : "Quick Sell"}
+                        </Button>
+                      )}
+                    </div>
+                    {/* Full Investor Report Button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setReportModalStartup(startup)}
+                      className="w-full h-8 px-3 rounded-xl font-mono text-xs font-bold border-cyan-500/30 text-cyan-300 bg-cyan-500/5 hover:bg-cyan-500/15 hover:text-white flex items-center justify-center gap-1.5 transition-all shadow-sm"
+                    >
+                      <BarChart3 className="h-3.5 w-3.5 text-cyan-400" /> Full Investor Report & Cap Table
+                    </Button>
                   </CardFooter>
                 </Card>
               </motion.div>
@@ -619,6 +669,14 @@ export default function TeamsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Team & Founder Performance Report Modal */}
+      <TeamReportModal
+        isOpen={!!reportModalStartup}
+        onClose={() => setReportModalStartup(null)}
+        startupSlug={reportModalStartup?.slug || null}
+        startupName={reportModalStartup?.name}
+      />
     </div>
   );
 }

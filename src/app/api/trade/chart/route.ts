@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCached, setCached } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,12 @@ export async function GET(req: NextRequest) {
         { success: false, message: "startupId is required." },
         { status: 400 }
       );
+    }
+
+    const cacheKey = `chart:${startupId}:${range}`;
+    const cached = getCached<any>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     const startup = await prisma.startup.findUnique({
@@ -67,7 +74,7 @@ export async function GET(req: NextRequest) {
       const currentPrice = startup.currentPrice || 100;
       const anchorTime = cutoffDate ? cutoffDate.toISOString() : new Date(now - 3600000).toISOString();
 
-      return NextResponse.json({
+      const emptyPayload = {
         success: true,
         startupId,
         range,
@@ -87,7 +94,9 @@ export async function GET(req: NextRequest) {
             timeLabel: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           },
         ],
-      });
+      };
+      setCached(cacheKey, emptyPayload, 2000);
+      return NextResponse.json(emptyPayload);
     }
 
     // Format points with localized timeLabel
@@ -103,14 +112,16 @@ export async function GET(req: NextRequest) {
       }),
     }));
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       startupId,
       range,
       currentPrice: startup.currentPrice,
       openPrice: startup.openPrice,
       data: formattedData,
-    });
+    };
+    setCached(cacheKey, responsePayload, 2000);
+    return NextResponse.json(responsePayload);
   } catch (error: any) {
     console.error("Chart API Error:", error);
     return NextResponse.json(

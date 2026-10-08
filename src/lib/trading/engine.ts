@@ -33,27 +33,30 @@ export interface PlaceOrderResult {
   trades: TradeResult[];
   message: string;
   newBalance: number;
+  newLtp?: number;
 }
 
 /**
- * Balanced Market Maker Tier Configuration:
- * Symmetrical, gentle price progression for both Buy and Sell sides.
- * Buying moves price gently up (+0.3%, +0.6%, etc.),
- * Selling moves price gently down (-0.3%, -0.6%, etc.).
+ * Responsive & Balanced Market Maker Tier Configuration:
+ * Granular price progression calibrated for audience pitch trading.
+ * Buying moves price up noticeably (+0.8%, +1.6%, +2.5%, +3.5%...),
+ * Selling moves price down symmetrically (-0.8%, -1.6%, -2.5%, -3.5%...).
  */
 export const BALANCED_MM_TIERS = [
-  { pct: 0.003, qty: 500 },    // ±0.3% (500 shares)
-  { pct: 0.006, qty: 1000 },   // ±0.6% (1,000 shares)
-  { pct: 0.010, qty: 2000 },   // ±1.0% (2,000 shares)
-  { pct: 0.015, qty: 3500 },   // ±1.5% (3,500 shares)
-  { pct: 0.022, qty: 5000 },   // ±2.2% (5,000 shares)
-  { pct: 0.030, qty: 7500 },   // ±3.0% (7,500 shares)
-  { pct: 0.040, qty: 10000 },  // ±4.0% (10,000 shares)
-  { pct: 0.055, qty: 15000 },  // ±5.5% (15,000 shares)
-  { pct: 0.075, qty: 25000 },  // ±7.5% (25,000 shares)
-  { pct: 0.100, qty: 50000 },  // ±10.0% (50,000 shares)
-  { pct: 0.140, qty: 100000 }, // ±14.0% (100,000 shares)
-  { pct: 0.200, qty: 200000 }, // ±20.0% (200,000 shares)
+  { pct: 0.008, qty: 25 },    // ±0.8% (25 shares)
+  { pct: 0.016, qty: 50 },    // ±1.6% (50 shares)
+  { pct: 0.025, qty: 75 },    // ±2.5% (75 shares)
+  { pct: 0.035, qty: 100 },   // ±3.5% (100 shares)
+  { pct: 0.048, qty: 150 },   // ±4.8% (150 shares)
+  { pct: 0.062, qty: 200 },   // ±6.2% (200 shares)
+  { pct: 0.078, qty: 300 },   // ±7.8% (300 shares)
+  { pct: 0.095, qty: 500 },   // ±9.5% (500 shares)
+  { pct: 0.115, qty: 750 },   // ±11.5% (750 shares)
+  { pct: 0.140, qty: 1000 },  // ±14.0% (1,000 shares)
+  { pct: 0.170, qty: 2000 },  // ±17.0% (2,000 shares)
+  { pct: 0.210, qty: 5000 },  // ±21.0% (5,000 shares)
+  { pct: 0.260, qty: 10000 }, // ±26.0% (10,000 shares)
+  { pct: 0.320, qty: 25000 }, // ±32.0% (25,000 shares)
 ];
 
 /**
@@ -421,9 +424,17 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
       }
 
       // 8. Update Last Traded Price (LTP) & Stock Metrics
-      // Balanced price discovery: LTP is the actual trade price executed
+      // Dynamic price discovery: LTP is computed with directional movement guarantees
       const lastTrade = executedTrades[executedTrades.length - 1];
-      const newLtp = lastTrade.price;
+      let newLtp = lastTrade.price;
+
+      // Ensure every BUY moves price UP, and every SELL moves price DOWN (minimum 0.05 tick, or higher)
+      if (side === "BUY") {
+        newLtp = Number(Math.max(startup.currentPrice + 0.05, newLtp).toFixed(2));
+      } else {
+        newLtp = Number(Math.max(1.00, Math.min(startup.currentPrice - 0.05, newLtp)).toFixed(2));
+      }
+
       const newHigh = Math.max(startup.dayHigh || newLtp, newLtp);
       const newLow = startup.dayLow && startup.dayLow > 0 ? Math.min(startup.dayLow, newLtp) : newLtp;
 
@@ -555,6 +566,8 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
     }, 10);
   }
 
+  invalidateCache();
+
   return {
     success: true,
     orderId: result.orderId,
@@ -571,6 +584,7 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
         ? `Partially filled: ${result.finalFilled} of ${quantity} shares at ${formatSharePrice(result.avgPrice)}.`
         : `Order placed at ${formatSharePrice(result.avgPrice)}. Awaiting matching.`,
     newBalance: result.currentBalance,
+    newLtp: result.newLtp,
   };
 }
 
@@ -793,14 +807,14 @@ export async function rebalanceMarketMakerLiquidity(
     });
   }
 
-  // Clean up old MM orders for this startup
-  await db.order.deleteMany({
+  // Clean up old MM orders by marking them CANCELLED (never delete to avoid foreign key violations with trades)
+  await db.order.updateMany({
     where: {
       startupId,
       userId: systemAccount.id,
-      filledQuantity: 0,
-      status: "OPEN",
+      status: { in: ["OPEN", "PARTIALLY_FILLED"] },
     },
+    data: { status: "CANCELLED" },
   });
 
   const ordersToCreate: any[] = [];

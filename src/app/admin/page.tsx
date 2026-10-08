@@ -142,6 +142,16 @@ export default function AdminControlRoomPage() {
   const [clearTrialsModalOpen, setClearTrialsModalOpen] = useState(false);
   const [isClearingTrials, setIsClearingTrials] = useState(false);
 
+  // Stock & Shares Manipulation (Superuser God Mode) State
+  const [manipulateStartup, setManipulateStartup] = useState<StartupItem | null>(null);
+  const [manipulateAction, setManipulateAction] = useState<"PRICE" | "SHARES" | "PRESSURE" | "REBALANCE">("PRICE");
+  const [manipulateNewPrice, setManipulateNewPrice] = useState<number>(100);
+  const [manipulateTotalShares, setManipulateTotalShares] = useState<number>(1000000);
+  const [manipulateReason, setManipulateReason] = useState<string>("");
+  const [manipulatePressureSide, setManipulatePressureSide] = useState<"BUY" | "SELL">("BUY");
+  const [manipulatePressureQty, setManipulatePressureQty] = useState<number>(250);
+  const [isManipulating, setIsManipulating] = useState(false);
+
   const cacheRef = React.useRef<{ [key: string]: string }>({});
 
   const refreshAllAdminData = async () => {
@@ -711,6 +721,63 @@ export default function AdminControlRoomPage() {
       }
     } catch (e) {
       flashMessage("Network error injecting liquidity.");
+    }
+  };
+
+  // 11. God Mode Stock & Shares Manipulation
+  const handleManipulateSubmit = async (payloadOverride?: any) => {
+    if (!manipulateStartup) return;
+    setIsManipulating(true);
+    try {
+      let body: any = payloadOverride;
+      if (!body) {
+        if (manipulateAction === "PRICE") {
+          body = {
+            action: "SET_PRICE",
+            newPrice: Number(manipulateNewPrice),
+            reason: manipulateReason.trim() || "Admin direct price adjustment",
+          };
+        } else if (manipulateAction === "SHARES") {
+          body = {
+            action: "SET_TOTAL_SHARES",
+            totalShares: Number(manipulateTotalShares),
+            reason: manipulateReason.trim() || "Admin equity / share count adjustment",
+          };
+        } else if (manipulateAction === "PRESSURE") {
+          body = {
+            action: "INJECT_VOLUME",
+            side: manipulatePressureSide,
+            quantity: Number(manipulatePressureQty),
+          };
+        } else if (manipulateAction === "REBALANCE") {
+          body = {
+            action: "REBALANCE_BOOK",
+          };
+        }
+      }
+
+      const res = await fetch(`/api/admin/startups/${manipulateStartup.id}/manipulate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        flashMessage(data.message || "Stock manipulation executed successfully!");
+        await refreshAllAdminData();
+        if (data.stock?.currentPrice) {
+          setManipulateNewPrice(data.stock.currentPrice);
+        }
+        if (data.stock?.totalShares) {
+          setManipulateTotalShares(data.stock.totalShares);
+        }
+      } else {
+        flashMessage(data.message || "Stock manipulation failed");
+      }
+    } catch (err) {
+      flashMessage("Network error during stock manipulation.");
+    } finally {
+      setIsManipulating(false);
     }
   };
 
@@ -2372,6 +2439,20 @@ export default function AdminControlRoomPage() {
                             <div className="flex items-center justify-end gap-2">
                               <Button
                                 size="sm"
+                                onClick={() => {
+                                  setManipulateStartup(s);
+                                  setManipulateNewPrice(ltp);
+                                  setManipulateTotalShares((s as any).totalShares || 1000000);
+                                  setManipulateReason("");
+                                  setManipulateAction("PRICE");
+                                }}
+                                className="h-8 px-2.5 rounded-lg font-mono text-xs font-semibold bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 transition-all shadow-sm shadow-amber-500/10"
+                              >
+                                <Zap className="h-3.5 w-3.5 mr-1 text-amber-400" />
+                                Manipulate
+                              </Button>
+                              <Button
+                                size="sm"
                                 variant="outline"
                                 onClick={() => handleInjectLiquidity(s.id)}
                                 className="h-8 px-2.5 rounded-lg font-mono text-xs border-white/10 text-zinc-300 hover:text-white"
@@ -3104,6 +3185,363 @@ export default function AdminControlRoomPage() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* GOD MODE: STOCK & SHARES MANIPULATION DIALOG */}
+      <Dialog
+        open={!!manipulateStartup}
+        onOpenChange={(open) => !open && setManipulateStartup(null)}
+      >
+        <DialogContent className="max-w-2xl bg-[#0b0f19]/95 border-amber-500/40 text-white backdrop-blur-2xl shadow-2xl shadow-amber-500/10">
+          {manipulateStartup && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-lg font-bold flex items-center justify-between text-white">
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                      <Zap className="h-4 w-4" />
+                    </span>
+                    <span>Shares & Market Manipulation Console</span>
+                  </span>
+                  <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                    SUPERUSER GOD MODE
+                  </span>
+                </DialogTitle>
+                <DialogDescription className="text-zinc-400 text-xs font-mono">
+                  Target: <strong className="text-white">{manipulateStartup.name}</strong> ({(manipulateStartup as any).symbol || "STK"}) • {manipulateStartup.industry}
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* Current Overview Bar */}
+              <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/10 font-mono text-xs">
+                <div>
+                  <div className="text-zinc-400 text-[10px] uppercase tracking-wider">Current Price</div>
+                  <div className="text-amber-400 font-bold text-base mt-0.5">
+                    {formatSharePrice(manipulateStartup.currentPrice || 100)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-zinc-400 text-[10px] uppercase tracking-wider">Floating Shares</div>
+                  <div className="text-white font-bold text-base mt-0.5">
+                    {((manipulateStartup as any).totalShares || 1000000).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-zinc-400 text-[10px] uppercase tracking-wider">Market Cap</div>
+                  <div className="text-cyan-400 font-bold text-base mt-0.5">
+                    {formatINR(((manipulateStartup as any).totalShares || 1000000) * (manipulateStartup.currentPrice || 100))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Manipulation Mode Tabs */}
+              <div className="flex border-b border-white/10 text-xs font-mono gap-1 pt-1 overflow-x-auto">
+                {[
+                  { id: "PRICE", label: "Direct Price Override" },
+                  { id: "SHARES", label: "Shares / Float Quantity" },
+                  { id: "PRESSURE", label: "Inject Market Pressure" },
+                  { id: "REBALANCE", label: "Order Book Reset" },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setManipulateAction(tab.id as any)}
+                    className={`px-3 py-2 rounded-t-lg transition-all font-semibold whitespace-nowrap ${
+                      manipulateAction === tab.id
+                        ? "bg-amber-500/20 text-amber-300 border-b-2 border-amber-400"
+                        : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab 1: Price Manipulation */}
+              {manipulateAction === "PRICE" && (
+                <div className="space-y-4 py-2 text-xs font-mono">
+                  <div>
+                    <label className="text-zinc-300 block mb-1.5 font-semibold">
+                      Quick Nudge Percentages
+                    </label>
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                      {[+5, +10, +25, +50, -5, -10, -25, -50].map((pct) => (
+                        <Button
+                          key={pct}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isManipulating}
+                          onClick={() =>
+                            handleManipulateSubmit({
+                              action: "NUDGE_PRICE",
+                              percentChange: pct,
+                              reason: `Admin quick nudge ${pct > 0 ? "+" : ""}${pct}%`,
+                            })
+                          }
+                          className={`h-7 px-1 text-[11px] font-bold ${
+                            pct > 0
+                              ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/20"
+                              : "border-rose-500/40 text-rose-400 hover:bg-rose-500/20"
+                          }`}
+                        >
+                          {pct > 0 ? `+${pct}%` : `${pct}%`}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-300 block font-semibold">
+                      Exact Target Share Price (₹ INR)
+                    </label>
+                    <Input
+                      type="number"
+                      step={0.1}
+                      min={1}
+                      value={manipulateNewPrice}
+                      onChange={(e) => setManipulateNewPrice(Number(e.target.value))}
+                      className="font-mono text-sm bg-black/40 border-white/15"
+                      placeholder="e.g. 250.00"
+                    />
+                    <div className="text-[11px] text-zinc-400 flex justify-between">
+                      <span>Min price floor: ₹1.00</span>
+                      <span className="text-cyan-400">
+                        Implied Market Cap: {formatINR(manipulateNewPrice * ((manipulateStartup as any).totalShares || 1000000))}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-300 block font-semibold">
+                      Audit Note / Rationale
+                    </label>
+                    <Input
+                      value={manipulateReason}
+                      onChange={(e) => setManipulateReason(e.target.value)}
+                      placeholder="e.g. Correcting valuation after pitch review"
+                      className="font-mono text-xs bg-black/40 border-white/15"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    disabled={isManipulating || manipulateNewPrice <= 0}
+                    onClick={() => handleManipulateSubmit()}
+                    className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold h-9 font-mono"
+                  >
+                    {isManipulating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Applying Price...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" /> Force Set Share Price to ₹{manipulateNewPrice}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Tab 2: Shares / Float Manipulation */}
+              {manipulateAction === "SHARES" && (
+                <div className="space-y-4 py-2 text-xs font-mono">
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-300 block font-semibold">
+                      Total Floating Shares Count
+                    </label>
+                    <Input
+                      type="number"
+                      step={10000}
+                      min={100}
+                      value={manipulateTotalShares}
+                      onChange={(e) => setManipulateTotalShares(Number(e.target.value))}
+                      className="font-mono text-sm bg-black/40 border-white/15"
+                      placeholder="e.g. 1500000"
+                    />
+                    <div className="text-[11px] text-zinc-400 flex justify-between">
+                      <span>Currently: {((manipulateStartup as any).totalShares || 1000000).toLocaleString()} shares</span>
+                      <span className="text-cyan-400">
+                        Projected Market Cap: {formatINR(manipulateTotalShares * (manipulateStartup.currentPrice || 100))}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px]">
+                    Note: Updating total shares adjusts the company's equity base and immediate market capitalization without altering the current LTP.
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-300 block font-semibold">
+                      Audit Note / Rationale
+                    </label>
+                    <Input
+                      value={manipulateReason}
+                      onChange={(e) => setManipulateReason(e.target.value)}
+                      placeholder="e.g. Share split or founder dilution adjustment"
+                      className="font-mono text-xs bg-black/40 border-white/15"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    disabled={isManipulating || manipulateTotalShares <= 0}
+                    onClick={() => handleManipulateSubmit()}
+                    className="w-full bg-cyan-500 hover:bg-cyan-400 text-black font-bold h-9 font-mono"
+                  >
+                    {isManipulating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Updating Float...
+                      </>
+                    ) : (
+                      <>
+                        <Layers className="h-4 w-4 mr-2" /> Set Total Floating Shares to {manipulateTotalShares.toLocaleString()}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Tab 3: Market Pressure Injection */}
+              {manipulateAction === "PRESSURE" && (
+                <div className="space-y-4 py-2 text-xs font-mono">
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-300 block font-semibold">
+                      Pressure Direction
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant={manipulatePressureSide === "BUY" ? "default" : "outline"}
+                        onClick={() => setManipulatePressureSide("BUY")}
+                        className={`font-mono text-xs font-bold h-9 ${
+                          manipulatePressureSide === "BUY"
+                            ? "bg-emerald-600 text-white border-emerald-500"
+                            : "border-white/10 text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        <TrendingUp className="h-4 w-4 mr-1.5 text-emerald-300" />
+                        BUY PRESSURE (Bullish Run)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={manipulatePressureSide === "SELL" ? "default" : "outline"}
+                        onClick={() => setManipulatePressureSide("SELL")}
+                        className={`font-mono text-xs font-bold h-9 ${
+                          manipulatePressureSide === "SELL"
+                            ? "bg-rose-600 text-white border-rose-500"
+                            : "border-white/10 text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        <TrendingUp className="h-4 w-4 mr-1.5 text-rose-300 rotate-180" />
+                        SELL PRESSURE (Bearish Selloff)
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-zinc-300 block mb-1.5 font-semibold">
+                      Pre-set Share Volume Waves
+                    </label>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[50, 100, 250, 500, 1000].map((qty) => (
+                        <Button
+                          key={qty}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setManipulatePressureQty(qty)}
+                          className={`h-8 font-mono text-xs ${
+                            manipulatePressureQty === qty
+                              ? "bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold"
+                              : "border-white/10 text-zinc-300"
+                          }`}
+                        >
+                          {qty}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-300 block font-semibold">
+                      Custom Share Quantity
+                    </label>
+                    <Input
+                      type="number"
+                      min={10}
+                      step={10}
+                      value={manipulatePressureQty}
+                      onChange={(e) => setManipulatePressureQty(Number(e.target.value))}
+                      className="font-mono text-sm bg-black/40 border-white/15"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    disabled={isManipulating || manipulatePressureQty <= 0}
+                    onClick={() => handleManipulateSubmit()}
+                    className={`w-full font-bold h-9 font-mono ${
+                      manipulatePressureSide === "BUY"
+                        ? "bg-emerald-500 hover:bg-emerald-400 text-black"
+                        : "bg-rose-500 hover:bg-rose-400 text-white"
+                    }`}
+                  >
+                    {isManipulating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Injecting Pressure...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" /> Execute {manipulatePressureSide} Pressure Wave ({manipulatePressureQty} shares)
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {/* Tab 4: Order Book Reset */}
+              {manipulateAction === "REBALANCE" && (
+                <div className="space-y-4 py-2 text-xs font-mono">
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] space-y-1">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5" /> Recalibrate Market Maker Book
+                    </div>
+                    <div>
+                      This cancels any stale market maker open quotes and seeds fresh balanced bid/ask depth tiers anchored around current LTP ({formatSharePrice(manipulateStartup.currentPrice || 100)}).
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    disabled={isManipulating}
+                    onClick={() => handleManipulateSubmit({ action: "REBALANCE_BOOK" })}
+                    className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold h-9 font-mono"
+                  >
+                    {isManipulating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" /> Resetting Order Book...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" /> Reset & Rebalance Order Book Now
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              <DialogFooter className="pt-2 border-t border-white/10 flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setManipulateStartup(null)}
+                  className="font-mono text-xs border-white/15 text-zinc-300"
+                >
+                  Close Console
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -21,6 +21,7 @@ import {
   Flame,
   Search,
   Clock,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +87,13 @@ export function AppSidebar({
           icon: Building2,
           visible: user?.role === "FII" || user?.role === "ADMIN",
           badge: "INSTITUTIONAL",
+        },
+        {
+          label: "Founder Portal",
+          path: "/teams",
+          icon: BarChart3,
+          visible: user?.role === "STARTUP" || user?.role === "ADMIN",
+          badge: "FOUNDER",
         },
       ],
     },
