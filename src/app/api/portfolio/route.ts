@@ -12,54 +12,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    // Retrieve fresh user from DB
-    const freshUser = await prisma.user.findUnique({
-      where: { id: user.id },
-    });
+    // Retrieve fresh user and portfolio data in parallel
+    const [freshUser, dbHoldings, investments, openOrders, recentOrders, recentTrades] =
+      await Promise.all([
+        prisma.user.findUnique({ where: { id: user.id } }),
+        prisma.holding.findMany({
+          where: { userId: user.id },
+          include: { startup: true },
+        }),
+        prisma.investment.findMany({
+          where: { investorId: user.id },
+          include: { startup: true },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.order.findMany({
+          where: {
+            userId: user.id,
+            status: { in: ["OPEN", "PARTIALLY_FILLED"] },
+          },
+          include: { startup: true },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.order.findMany({
+          where: { userId: user.id },
+          include: { startup: true },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        }),
+        prisma.trade.findMany({
+          where: {
+            OR: [{ buyerId: user.id }, { sellerId: user.id }],
+          },
+          include: { startup: true },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        }),
+      ]);
 
     if (!freshUser) {
       return NextResponse.json({ success: false, message: "User not found" }, { status: 404 });
     }
-
-    // 1. Fetch official Stock Holdings from the Holding table
-    const dbHoldings = await prisma.holding.findMany({
-      where: { userId: freshUser.id },
-      include: { startup: true },
-    });
-
-    // 2. Also retrieve all investments (legacy + trades) for fallback and transaction history
-    const investments = await prisma.investment.findMany({
-      where: { investorId: freshUser.id },
-      include: { startup: true },
-      orderBy: { createdAt: "desc" },
-    });
-
-    // 3. Retrieve user's active/recent orders
-    const openOrders = await prisma.order.findMany({
-      where: {
-        userId: freshUser.id,
-        status: { in: ["OPEN", "PARTIALLY_FILLED"] },
-      },
-      include: { startup: true },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const recentOrders = await prisma.order.findMany({
-      where: { userId: freshUser.id },
-      include: { startup: true },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    });
-
-    // 4. Retrieve user's recent trades
-    const recentTrades = await prisma.trade.findMany({
-      where: {
-        OR: [{ buyerId: freshUser.id }, { sellerId: freshUser.id }],
-      },
-      include: { startup: true },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    });
 
     // Build unified holdings list
     const holdingsMap = new Map<string, any>();

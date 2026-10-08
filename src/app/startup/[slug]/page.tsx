@@ -637,13 +637,31 @@ export default function StockDetailPage() {
               </div>
             </div>
 
+            {/* Available Stocks Announcement for Buyer */}
+            {tradeSide === "BUY" && (
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 mb-4 text-xs font-mono">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-zinc-300 font-semibold">Company Available Stocks:</span>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono text-sm font-black text-emerald-400">
+                    {(startup.availableShares ?? startup.totalShares ?? 1000000).toLocaleString("en-IN")}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 block">
+                    of {(startup.totalShares || 1000000).toLocaleString("en-IN")} authorized
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Shares Quantity Input */}
             <div className="space-y-2 mb-4">
               <div className="flex justify-between items-center text-xs font-mono">
                 <label className="text-zinc-400 uppercase font-semibold">Quantity (Shares)</label>
                 <span className="text-zinc-400 text-[11px]">
                   {tradeSide === "BUY"
-                    ? `Avail: ${formatINR(userCash)}`
+                    ? `Avail to buy: ${(startup.availableShares ?? startup.totalShares ?? 1000000).toLocaleString("en-IN")} shares`
                     : `Owned: ${sharesOwned} shares`}
                 </span>
               </div>
@@ -706,6 +724,14 @@ export default function StockDetailPage() {
                   {orderType === "LIMIT" ? formatSharePrice(limitPrice) : `${formatSharePrice(currentPrice)} (Market)`}
                 </span>
               </div>
+              {tradeSide === "BUY" && (
+                <div className="flex justify-between items-center text-zinc-400">
+                  <span>Company Available:</span>
+                  <span className="text-emerald-400 font-bold">
+                    {(startup.availableShares ?? startup.totalShares ?? 1000000).toLocaleString("en-IN")} shares
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-zinc-400">
                 <span>{tradeSide === "BUY" ? "Total Payable:" : "Estimated Value:"}</span>
                 <span className="text-white font-black text-sm">{formatINR(estimatedTotal)}</span>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { calculatePnL } from "@/lib/formatters";
+import { getCached, setCached } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,12 @@ export async function GET(req: NextRequest) {
         { success: false, message: "Unauthorized" },
         { status: 401 }
       );
+    }
+
+    const cacheKey = `holdings:${userId}`;
+    const cached = getCached<any>(cacheKey);
+    if (cached) {
+      return NextResponse.json({ success: true, holdings: cached });
     }
 
     const holdings = await prisma.holding.findMany({
@@ -56,9 +63,10 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    setCached(cacheKey, formattedHoldings, 1500);
     return NextResponse.json({ success: true, holdings: formattedHoldings });
   } catch (error: any) {
-    console.error("Holdings GET Error:", error);
+    console.error("Holdings API Error:", error);
     return NextResponse.json(
       { success: false, message: error.message || "Failed to fetch holdings." },
       { status: 500 }

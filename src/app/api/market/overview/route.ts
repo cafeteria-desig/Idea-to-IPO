@@ -1,31 +1,63 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCached, setCached } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const marketState =
-      (await prisma.marketState.findUnique({ where: { id: "global" } })) || {
-        isMarketActive: true,
-        activeStartupId: null,
-        hideInvestorNamesPublicly: false,
-        bannerMessage: null,
-      };
+    const cacheKey = "market:overview";
+    const cached = getCached<any>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
 
-    const rawStartups = await prisma.startup.findMany({
-      orderBy: { pitchOrder: "asc" },
-    });
+    // Parallel fetch all core market telemetry
+    const [marketStateRes, rawStartups, holdingSums, recentInvestments, recentActivities] =
+      await Promise.all([
+        prisma.marketState.findUnique({ where: { id: "global" } }),
+        prisma.startup.findMany({ orderBy: { pitchOrder: "asc" } }),
+        prisma.holding.groupBy({
+          by: ["startupId"],
+          _sum: { quantity: true },
+          where: { user: { role: { not: "ADMIN" } } },
+        }),
+        prisma.investment.findMany({
+          where: { status: "VALID" },
+          orderBy: { createdAt: "desc" },
+          take: 60,
+        }),
+        prisma.activityFeed.findMany({
+          where: { isPublic: true },
+          orderBy: { createdAt: "desc" },
+          take: 25,
+        }),
+      ]);
 
-    // Enrich startups with stock metrics
+    const marketState = marketStateRes || {
+      isMarketActive: true,
+      activeStartupId: null,
+      hideInvestorNamesPublicly: false,
+      bannerMessage: null,
+    };
+
+    const holdingMap = new Map<string, number>();
+    for (const h of holdingSums) {
+      holdingMap.set(h.startupId, h._sum.quantity || 0);
+    }
+
+    // Enrich startups with stock metrics and availableShares
     const stocks = rawStartups.map((s) => {
       const openPrice = s.openPrice || s.initialPrice || 100;
       const priceChange = Number((s.currentPrice - openPrice).toFixed(2));
       const percentageChange = Number((((s.currentPrice - openPrice) / openPrice) * 100).toFixed(2));
       const marketCap = Number((s.totalShares * s.currentPrice).toFixed(2));
+      const heldShares = holdingMap.get(s.id) || 0;
+      const availableShares = Math.max(0, Math.floor(s.totalShares - heldShares));
 
       return {
         ...s,
+        availableShares,
         priceChange,
         percentageChange,
         marketCap,
@@ -40,32 +72,21 @@ export async function GET() {
     );
 
     // Top Gainers (highest percentage change)
-    const topGainers = [...stocks].sort((a, b) => b.percentageChange - a.percentageChange);
+    const topGainers = [...stocks].sort((a, b) => (b.percentageChange ?? 0) - (a.percentageChange ?? 0));
 
     // Top Losers (lowest percentage change)
-    const topLosers = [...stocks].sort((a, b) => a.percentageChange - b.percentageChange);
+    const topLosers = [...stocks].sort((a, b) => (a.percentageChange ?? 0) - (b.percentageChange ?? 0));
 
     // Most Traded (highest total volume)
-    const mostTraded = [...stocks].sort((a, b) => b.totalVolume - a.totalVolume);
-
-    const validInvestments = await prisma.investment.findMany({
-      where: { status: "VALID" },
-      orderBy: { createdAt: "asc" },
-    });
+    const mostTraded = [...stocks].sort((a, b) => (b.totalVolume ?? 0) - (a.totalVolume ?? 0));
 
     const totalMarketInvestment = stocks.reduce((acc, s) => acc + s.totalInvestmentReceived, 0);
     const totalRetailInvestment = stocks.reduce((acc, s) => acc + s.retailInvestment, 0);
     const totalFIIInvestment = stocks.reduce((acc, s) => acc + s.fiiInvestment, 0);
     const totalVolume = stocks.reduce((acc, s) => acc + s.totalVolume, 0);
 
-    const uniqueInvestors = new Set(validInvestments.map((i) => i.investorId));
+    const uniqueInvestors = new Set(recentInvestments.map((i) => i.investorId));
     const openIposCount = stocks.filter((s) => s.ipoStatus === "IPO_OPEN").length;
-
-    const recentActivities = await prisma.activityFeed.findMany({
-      where: { isPublic: true },
-      orderBy: { createdAt: "desc" },
-      take: 25,
-    });
 
     const maskedActivities = recentActivities.map((act) => ({
       ...act,
@@ -74,7 +95,8 @@ export async function GET() {
         : act.investorName,
     }));
 
-    // Build cumulative trend data points
+    // Build cumulative trend data points in chronological order
+    const investmentsAsc = [...recentInvestments].reverse();
     const startupRunningTotals: Record<string, number> = {};
     stocks.forEach((s) => {
       startupRunningTotals[s.name] = 0;
@@ -87,7 +109,7 @@ export async function GET() {
       },
     ];
 
-    validInvestments.forEach((inv, index) => {
+    investmentsAsc.forEach((inv, index) => {
       const targetStartup = stocks.find((s) => s.id === inv.startupId);
       if (targetStartup) {
         startupRunningTotals[targetStartup.name] =
@@ -109,7 +131,7 @@ export async function GET() {
         ? [chartTrends[0], ...chartTrends.slice(chartTrends.length - 24)]
         : chartTrends;
 
-    return NextResponse.json({
+    const payload = {
       isMarketActive: marketState.isMarketActive,
       activeStartupId: marketState.activeStartupId,
       activeStartup,
@@ -119,10 +141,10 @@ export async function GET() {
       totalRetailInvestment,
       totalFIIInvestment,
       totalVolume,
-      activeInvestorsCount: uniqueInvestors.size,
+      activeInvestorsCount: Math.max(uniqueInvestors.size, 1),
       totalStartupsCount: stocks.length,
       openIposCount,
-      totalTransactionsCount: validInvestments.length,
+      totalTransactionsCount: recentInvestments.length,
       stocks,
       leaderboard,
       topGainers,
@@ -130,7 +152,10 @@ export async function GET() {
       mostTraded,
       recentActivities: maskedActivities,
       chartTrends: sampledTrends,
-    });
+    };
+
+    setCached(cacheKey, payload, 1500);
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Market overview error:", error);
     return NextResponse.json(

@@ -318,6 +318,7 @@ export default function MarketTerminalPage() {
                   <TableHead>Stock / Company</TableHead>
                   <TableHead>Sector</TableHead>
                   <TableHead>LTP (Current)</TableHead>
+                  <TableHead>Available Stocks</TableHead>
                   <TableHead>24h Change</TableHead>
                   <TableHead>Volume</TableHead>
                   <TableHead>Market Cap</TableHead>
@@ -344,6 +345,10 @@ export default function MarketTerminalPage() {
                       <TableCell className="font-mono text-xs text-cyan-400 uppercase">{s.industry}</TableCell>
                       <TableCell className="font-mono font-black text-sm text-white">
                         {formatSharePrice(s.currentPrice)}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs font-semibold text-emerald-400">
+                        {(s.availableShares ?? s.totalShares ?? 1000000).toLocaleString("en-IN")}
+                        <span className="text-[10px] text-zinc-500 block">/ {(s.totalShares || 1000000).toLocaleString("en-IN")}</span>
                       </TableCell>
                       <TableCell>
                         <span

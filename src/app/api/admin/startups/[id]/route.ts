@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminUser } from "@/lib/auth";
 import { seedMarketLiquidityForStartup } from "@/lib/trading/engine";
+import { invalidateCache } from "@/lib/cache";
 
 export async function DELETE(
   req: NextRequest,
@@ -123,6 +124,7 @@ export async function PUT(
       currentPrice,
       equityOffered,
       valuation,
+      totalShares,
       pitchOrder,
       problem,
       solution,
@@ -144,17 +146,21 @@ export async function PUT(
     if (solution) updateData.solution = solution.trim();
     if (businessModel) updateData.businessModel = businessModel.trim();
     if (targetMarket) updateData.targetMarket = targetMarket.trim();
-    if (fundingAsk) updateData.fundingAsk = Number(fundingAsk);
-    if (equityOffered) updateData.equityOffered = Number(equityOffered);
-    if (pitchOrder) updateData.pitchOrder = Number(pitchOrder);
+    if (fundingAsk !== undefined) updateData.fundingAsk = Number(fundingAsk);
+    if (equityOffered !== undefined) updateData.equityOffered = Number(equityOffered);
+    if (pitchOrder !== undefined) updateData.pitchOrder = Number(pitchOrder);
     if (ipoStatus) updateData.ipoStatus = ipoStatus;
+
+    if (totalShares !== undefined && Number(totalShares) > 0) {
+      updateData.totalShares = Math.floor(Number(totalShares));
+    }
 
     const newPrice = Number(shareValue || currentPrice);
     if (newPrice && !isNaN(newPrice) && newPrice > 0) {
       updateData.currentPrice = newPrice;
     }
 
-    if (valuation && Number(valuation) > 0) {
+    if (valuation !== undefined && Number(valuation) > 0) {
       updateData.initialValuation = Number(valuation);
     }
 
@@ -162,6 +168,8 @@ export async function PUT(
       where: { id: startup.id },
       data: updateData,
     });
+
+    invalidateCache();
 
     if (newPrice && newPrice !== startup.currentPrice) {
       try {

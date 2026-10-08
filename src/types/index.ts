@@ -73,6 +73,7 @@ export interface StartupItem {
   dayHigh: number;
   dayLow: number;
   totalShares: number;
+  availableShares?: number;
   initialValuation: number;
   totalVolume: number;
   isSuspended: boolean;

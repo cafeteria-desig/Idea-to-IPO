@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { formatINR } from "@/lib/formatters";
 import { rebalanceMarketMakerLiquidity } from "@/lib/trading/engine";
+import { invalidateCache } from "@/lib/cache";
 
 export async function POST(req: NextRequest) {
   try {
@@ -108,12 +109,10 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Calculate highly sensitive valuation/share price appreciation from institutional/retail investment
+      // Balanced and gentle valuation/share price appreciation from institutional/retail investment
       const fundingAsk = startup.fundingAsk || 10000000;
       const ratio = amount / fundingAsk;
-      // Sensitive price discovery without artificial 15% ceiling:
-      // Minimum +3% for any investment, scaling dynamically up into 50%, 200%, 500%+ for heavy cheques
-      const priceGrowthPct = Math.max(0.03, ratio * 2.0);
+      const priceGrowthPct = Math.min(0.05, Math.max(0.003, Number((ratio * 0.12).toFixed(4))));
       const currentPrice = startup.currentPrice || 100;
       const newPrice = Number((currentPrice * (1 + priceGrowthPct)).toFixed(2));
       const newHigh = Math.max(startup.dayHigh || currentPrice, newPrice);
@@ -171,9 +170,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Re-center dynamic market maker liquidity around the newly established valuation price
-      await rebalanceMarketMakerLiquidity(startup.id, newPrice, tx);
-
       // Broadcast to activity feed
       await tx.activityFeed.create({
         data: {
@@ -192,6 +188,11 @@ export async function POST(req: NextRequest) {
         updatedStartup,
       };
     });
+
+    invalidateCache();
+    setTimeout(() => {
+      rebalanceMarketMakerLiquidity(result.updatedStartup.id, result.updatedStartup.currentPrice).catch(console.warn);
+    }, 10);
 
     return NextResponse.json({
       success: true,

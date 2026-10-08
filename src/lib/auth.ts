@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "./prisma";
+import { getCached, setCached } from "./cache";
 import type { SafeUser } from "@/types";
 
 export const AUTH_COOKIE_NAME = "idea_ipo_user_id";
@@ -44,6 +45,12 @@ export async function getCurrentUser(request?: Request): Promise<SafeUser | null
     return null;
   }
 
+  const cacheKey = `user:session:${userId}`;
+  const cachedUser = getCached<SafeUser>(cacheKey);
+  if (cachedUser) {
+    return cachedUser;
+  }
+
   try {
     let user = await prisma.user.findUnique({
       where: { id: userId },
@@ -78,7 +85,9 @@ export async function getCurrentUser(request?: Request): Promise<SafeUser | null
         .catch(() => {});
     }
 
-    return sanitizeUser(user);
+    const safe = sanitizeUser(user);
+    setCached(cacheKey, safe, 2000);
+    return safe;
   } catch (error) {
     console.error("Error retrieving current user:", error);
     return null;

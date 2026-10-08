@@ -319,12 +319,14 @@ export default function TeamsPage() {
                     {/* Financial Metrics Strip */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 rounded-2xl border border-white/10 bg-[#060911]/60 p-3 text-xs font-mono">
                       <div>
-                        <span className="block text-[10px] text-zinc-400 uppercase">24h High</span>
-                        <span className="font-bold text-emerald-400">{formatSharePrice(startup.dayHigh || startup.currentPrice)}</span>
+                        <span className="block text-[10px] text-zinc-400 uppercase">Available Stocks</span>
+                        <span className="font-bold text-emerald-400">
+                          {(startup.availableShares ?? startup.totalShares ?? 1000000).toLocaleString("en-IN")}
+                        </span>
                       </div>
                       <div>
-                        <span className="block text-[10px] text-zinc-400 uppercase">24h Low</span>
-                        <span className="font-bold text-rose-400">{formatSharePrice(startup.dayLow || startup.currentPrice)}</span>
+                        <span className="block text-[10px] text-zinc-400 uppercase">24h High</span>
+                        <span className="font-bold text-emerald-400">{formatSharePrice(startup.dayHigh || startup.currentPrice)}</span>
                       </div>
                       <div>
                         <span className="block text-[10px] text-zinc-400 uppercase">Volume</span>
@@ -436,15 +438,17 @@ export default function TeamsPage() {
               <div className="grid grid-cols-2 gap-2 p-3 rounded-2xl bg-white/[0.04] border border-white/10 text-xs">
                 <div>
                   <span className="block text-[10px] font-mono text-zinc-400 uppercase font-semibold">
-                    Stock Available
+                    {tradeSide === "BUY" ? "Company Available Stocks" : "Your Owned Shares"}
                   </span>
-                  <span className={`text-sm font-mono font-black ${sharesOwned > 0 ? "text-emerald-400" : "text-zinc-400"}`}>
-                    {sharesOwned.toLocaleString("en-IN")} {sharesOwned === 1 ? "Share" : "Shares"}
+                  <span className="text-sm font-mono font-black text-emerald-400">
+                    {tradeSide === "BUY"
+                      ? `${(selectedStartup.availableShares ?? selectedStartup.totalShares ?? 1000000).toLocaleString("en-IN")} Shares`
+                      : `${sharesOwned.toLocaleString("en-IN")} Shares`}
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="block text-[10px] font-mono text-zinc-400 uppercase font-semibold">
-                    {tradeSide === "BUY" ? "Available Cash" : "Avg Buy Price"}
+                    {tradeSide === "BUY" ? "Your Available Cash" : "Avg Buy Price"}
                   </span>
                   <span className="text-sm font-mono font-black text-cyan-300">
                     {tradeSide === "BUY"
@@ -463,11 +467,14 @@ export default function TeamsPage() {
                   <span className="text-zinc-400 text-[11px]">
                     {tradeSide === "BUY" ? (
                       <>
-                        Cash: <strong className="text-emerald-400 font-bold">{formatINR(userCash)}</strong>
+                        Avail to Buy:{" "}
+                        <strong className="text-emerald-400 font-bold">
+                          {(selectedStartup.availableShares ?? selectedStartup.totalShares ?? 1000000).toLocaleString("en-IN")}
+                        </strong>
                       </>
                     ) : (
                       <>
-                        Stock Available:{" "}
+                        Owned to Sell:{" "}
                         <strong className={sharesOwned > 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
                           {sharesOwned} {sharesOwned === 1 ? "share" : "shares"}
                         </strong>

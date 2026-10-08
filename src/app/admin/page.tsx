@@ -123,6 +123,8 @@ export default function AdminControlRoomPage() {
   const [teamIndustry, setTeamIndustry] = useState("Fintech & Web3");
   const [teamAsk, setTeamAsk] = useState<number>(10000000);
   const [teamSharePrice, setTeamSharePrice] = useState<number>(100);
+  const [teamTotalShares, setTeamTotalShares] = useState<number>(1000000);
+  const [teamValuation, setTeamValuation] = useState<number>(100000000);
   const [teamEquity, setTeamEquity] = useState<number>(10);
   const [teamPitchOrder, setTeamPitchOrder] = useState<number>(1);
   const [teamStatus, setTeamStatus] = useState<IPOStatus>("IPO_OPEN");
@@ -321,14 +323,12 @@ export default function AdminControlRoomPage() {
       setRegisterTeamError("Startup idea / pitch summary is required.");
       return;
     }
-    if (!teamAsk || teamAsk <= 0) {
-      setRegisterTeamError("Funding Ask must be greater than 0.");
-      return;
-    }
-    if (!teamSharePrice || teamSharePrice <= 0) {
-      setRegisterTeamError("Share value must be greater than 0.");
-      return;
-    }
+
+    const sharesToSubmit = Number(teamTotalShares) > 0 ? Number(teamTotalShares) : 1000000;
+    const priceToSubmit = Number(teamSharePrice) > 0 ? Number(teamSharePrice) : 100;
+    const valuationToSubmit = Number(teamValuation) > 0 ? Number(teamValuation) : sharesToSubmit * priceToSubmit;
+    const askToSubmit = Number(teamAsk) > 0 ? Number(teamAsk) : Math.round(valuationToSubmit * 0.1);
+    const equityToSubmit = Number(teamEquity) > 0 ? Number(teamEquity) : 10;
 
     setIsRegisteringTeam(true);
 
@@ -346,9 +346,12 @@ export default function AdminControlRoomPage() {
           pitchSummary: teamIdea.trim(),
           tagLine: teamTagline.trim() || teamIdea.trim().slice(0, 80),
           industry: teamIndustry,
-          fundingAsk: Number(teamAsk),
-          shareValue: Number(teamSharePrice),
-          equityOffered: Number(teamEquity),
+          totalShares: sharesToSubmit,
+          shareValue: priceToSubmit,
+          initialPrice: priceToSubmit,
+          valuation: valuationToSubmit,
+          fundingAsk: askToSubmit,
+          equityOffered: equityToSubmit,
           pitchOrder: Number(teamPitchOrder) || startups.length + 1,
           ipoStatus: teamStatus,
           founderName: teamFounderName.trim(),
@@ -377,6 +380,11 @@ export default function AdminControlRoomPage() {
       setTeamFounderName("");
       setTeamProblem("");
       setTeamSolution("");
+      setTeamTotalShares(1000000);
+      setTeamSharePrice(100);
+      setTeamValuation(100000000);
+      setTeamAsk(10000000);
+      setTeamEquity(10);
       await refreshAllAdminData();
     } catch (err: any) {
       setRegisterTeamError(err.message || "An error occurred while registering the team.");
@@ -2805,92 +2813,142 @@ export default function AdminControlRoomPage() {
               />
             </div>
 
-            {/* Financial Requirements Strip */}
+            {/* Financial Calibration & Share Valuation (Fully Flexible: Put any amount of shares and values) */}
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.04] p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5" /> Financial Calibration & Share Valuation
                 </span>
-                <span className="text-[11px] font-mono text-zinc-400">All fields required</span>
+                <span className="text-[11px] font-mono text-zinc-400">Put any custom shares & values</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Funding Ask */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Total Authorized Shares */}
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-zinc-300">
-                    Funding Ask (₹) <span className="text-rose-400">*</span>
+                  <label className="text-[11px] font-mono text-zinc-300 flex items-center justify-between">
+                    <span>Total Shares</span>
+                    <span className="text-emerald-400 font-bold">{teamTotalShares?.toLocaleString("en-IN")}</span>
                   </label>
                   <Input
                     type="number"
-                    min={10000}
-                    step={50000}
-                    value={teamAsk}
-                    onChange={(e) => setTeamAsk(Number(e.target.value))}
+                    min={1}
+                    value={teamTotalShares}
+                    onChange={(e) => {
+                      const s = Number(e.target.value);
+                      setTeamTotalShares(s);
+                      if (teamSharePrice > 0) {
+                        setTeamValuation(s * teamSharePrice);
+                      }
+                    }}
+                    placeholder="e.g. 1000000"
                     className="bg-black/60 border-white/15 text-xs text-white font-mono"
                     required
                   />
-                  <span className="text-[10px] font-mono text-emerald-400 block font-bold">
-                    {formatINR(teamAsk)}
+                  <span className="text-[10px] font-mono text-zinc-400 block">
+                    Any share quantity
                   </span>
                 </div>
 
                 {/* Share Value / Price */}
                 <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-zinc-300">
-                    Share Value (LTP ₹) <span className="text-rose-400">*</span>
+                  <label className="text-[11px] font-mono text-zinc-300 flex items-center justify-between">
+                    <span>Share Value (₹)</span>
+                    <span className="text-cyan-300 font-bold">{formatSharePrice(teamSharePrice)}</span>
                   </label>
                   <Input
                     type="number"
-                    min={1}
-                    step={1}
+                    min={0.01}
+                    step="any"
                     value={teamSharePrice}
-                    onChange={(e) => setTeamSharePrice(Number(e.target.value))}
-                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
-                    required
-                  />
-                  <span className="text-[10px] font-mono text-cyan-300 block font-bold">
-                    {formatSharePrice(teamSharePrice)}
-                  </span>
-                </div>
-
-                {/* Equity Offered */}
-                <div className="space-y-1">
-                  <label className="text-[11px] font-mono text-zinc-300">
-                    Equity Offered (%) <span className="text-rose-400">*</span>
-                  </label>
-                  <Input
-                    type="number"
-                    min={0.1}
-                    max={100}
-                    step={0.5}
-                    value={teamEquity}
-                    onChange={(e) => setTeamEquity(Number(e.target.value))}
+                    onChange={(e) => {
+                      const p = Number(e.target.value);
+                      setTeamSharePrice(p);
+                      if (teamTotalShares > 0) {
+                        setTeamValuation(teamTotalShares * p);
+                      }
+                    }}
+                    placeholder="e.g. 100"
                     className="bg-black/60 border-white/15 text-xs text-white font-mono"
                     required
                   />
                   <span className="text-[10px] font-mono text-zinc-400 block">
-                    {teamEquity}% equity
+                    Initial stock LTP
+                  </span>
+                </div>
+
+                {/* Total Valuation */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-zinc-300 flex items-center justify-between">
+                    <span>Valuation (₹)</span>
+                    <span className="text-emerald-300 font-bold">{formatINR(teamValuation)}</span>
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    step="any"
+                    value={teamValuation}
+                    onChange={(e) => setTeamValuation(Number(e.target.value))}
+                    placeholder="e.g. 100000000"
+                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
+                  />
+                  <span className="text-[10px] font-mono text-zinc-400 block">
+                    Shares × Price or custom
+                  </span>
+                </div>
+
+                {/* Funding Ask */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-zinc-300 flex items-center justify-between">
+                    <span>Funding Ask (₹)</span>
+                    <span className="text-amber-300 font-bold">{formatINR(teamAsk)}</span>
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={teamAsk}
+                    onChange={(e) => setTeamAsk(Number(e.target.value))}
+                    placeholder="e.g. 10000000"
+                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
+                  />
+                  <span className="text-[10px] font-mono text-zinc-400 block">
+                    Any ask amount
                   </span>
                 </div>
               </div>
 
-              {/* Dynamic Implied Valuation Banner */}
-              {teamAsk > 0 && teamEquity > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-black/40 border border-white/10 text-xs font-mono">
-                  <div>
-                    <span className="text-zinc-400">Implied Valuation: </span>
-                    <strong className="text-emerald-300 font-bold">
-                      {formatINR(Math.round(teamAsk / (teamEquity / 100)))}
-                    </strong>
+              {/* Equity Offered Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-zinc-300">
+                    Equity Offered (%)
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="any"
+                    value={teamEquity}
+                    onChange={(e) => setTeamEquity(Number(e.target.value))}
+                    placeholder="e.g. 10"
+                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
+                  />
+                  <span className="text-[10px] font-mono text-zinc-400 block">
+                    {teamEquity}% equity offered
+                  </span>
+                </div>
+
+                <div className="flex flex-col justify-center p-3 rounded-xl bg-black/40 border border-white/10 text-xs font-mono space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-400">Total Shares:</span>
+                    <strong className="text-cyan-300 font-bold">{teamTotalShares?.toLocaleString("en-IN")}</strong>
                   </div>
-                  <div>
-                    <span className="text-zinc-400">Authorized Shares: </span>
-                    <strong className="text-cyan-300 font-bold">
-                      {Math.max(1000, Math.round((teamAsk / (teamEquity / 100)) / (teamSharePrice || 100))).toLocaleString("en-IN")} shares
-                    </strong>
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-400">Company Valuation:</span>
+                    <strong className="text-emerald-300 font-bold">{formatINR(teamValuation)}</strong>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Row 4: Founder and Initial Status */}

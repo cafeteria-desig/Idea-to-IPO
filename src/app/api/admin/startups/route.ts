@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminUser } from "@/lib/auth";
 import { seedMarketLiquidityForStartup } from "@/lib/trading/engine";
+import { invalidateCache } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -86,30 +87,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const parsedAsk = Number(fundingAsk);
-    if (isNaN(parsedAsk) || parsedAsk <= 0) {
-      return NextResponse.json(
-        { success: false, message: "Valid Funding Ask amount (₹) is required." },
-        { status: 400 }
-      );
-    }
-
     const parsedPrice = Number(shareValue || initialPrice || 100);
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      return NextResponse.json(
-        { success: false, message: "Valid Share Value / Price (₹) is required." },
-        { status: 400 }
-      );
-    }
+    const validPrice = !isNaN(parsedPrice) && parsedPrice > 0 ? parsedPrice : 100;
+
+    const parsedShares = Number(totalShares);
+    const validShares = !isNaN(parsedShares) && parsedShares > 0 ? Math.floor(parsedShares) : 1000000;
+
+    const parsedValuation = Number(valuation);
+    const validValuation = !isNaN(parsedValuation) && parsedValuation > 0
+      ? parsedValuation
+      : Math.round(validShares * validPrice);
+
+    const parsedAsk = Number(fundingAsk);
+    const validAsk = !isNaN(parsedAsk) && parsedAsk > 0
+      ? parsedAsk
+      : Math.round(validValuation * 0.1);
 
     const parsedEquity = equityOffered ? Number(equityOffered) : 10;
-    const computedValuation = valuation && Number(valuation) > 0
-      ? Number(valuation)
-      : Math.round(parsedAsk / (parsedEquity / 100));
-
-    const computedShares = totalShares && Number(totalShares) > 0
-      ? Number(totalShares)
-      : Math.max(1000, Math.round(computedValuation / parsedPrice));
+    const computedValuation = validValuation;
+    const computedShares = validShares;
 
     // 2. Generate slug
     let baseSlug = name
@@ -228,6 +224,8 @@ export async function POST(req: NextRequest) {
         console.warn("Background registration post-processing notice:", bgErr);
       }
     })();
+
+    invalidateCache();
 
     return NextResponse.json({
       success: true,
