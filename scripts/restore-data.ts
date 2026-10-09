@@ -1,40 +1,202 @@
 import { PrismaClient } from "@prisma/client";
-import { seedMarketLiquidityForStartup } from "../src/lib/trading/engine";
 import audienceTokens from "../src/data/audience-tokens.json";
+import { seedMarketLiquidityForStartup } from "../src/lib/trading/engine";
+import { invalidateCache } from "../src/lib/cache";
 
-const prisma = new PrismaClient();
+// Use DIRECT_URL for scripts to avoid PgBouncer pooler connection limits/timeouts
+const dbUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const prisma = new PrismaClient({
+  datasources: {
+    db: { url: dbUrl },
+  },
+});
 
-export async function seedDatabase() {
-  console.log("🚀 Seeding IDEA TO IPO database baseline...");
+async function main() {
+  console.log("==================================================================");
+  console.log("      FINALIZING AUDIENCES, INVESTORS & STARTUP TEAMS             ");
+  console.log("==================================================================");
 
-  // 1. Clear existing records in reverse dependency order
-  await prisma.activityFeed.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.capitalAdjustment.deleteMany();
-  await prisma.finalAward.deleteMany();
-  await prisma.investment.deleteMany();
-  await prisma.priceHistory.deleteMany();
-  await prisma.trade.deleteMany();
-  await prisma.order.deleteMany();
-  await prisma.holding.deleteMany();
-  await prisma.watchlist.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.startup.deleteMany();
-  await prisma.marketState.deleteMany();
-
-  // 2. Seed Global Market State
-  await prisma.marketState.create({
-    data: {
-      id: "global",
-      isMarketActive: true,
-      activeStartupId: null,
-      hideInvestorNamesPublicly: false,
-      bannerMessage: "Welcome to IDEA TO IPO — Live Auditorium Pitch & Capital Exchange",
+  // 1. Core Users (Admin, FIIs, Retail Investors, Founders)
+  const coreUsers = [
+    {
+      id: "user-admin",
+      name: "Event Director",
+      email: "admin@ideaipo.com",
+      password: "Bhavishy@2007",
+      token: "999999",
+      role: "ADMIN",
+      status: "ACTIVE",
+      startingCapital: 500000000,
+      currentBalance: 500000000,
+      totalInvested: 0,
+      isOnline: true,
     },
+    {
+      id: "user-fii-1",
+      name: "Nexus Horizon Capital",
+      email: "fii1@ideaipo.com",
+      password: "fii",
+      token: "837195",
+      role: "FII",
+      status: "ACTIVE",
+      startingCapital: 10000000,
+      currentBalance: 10000000,
+      totalInvested: 0,
+      isOnline: true,
+    },
+    {
+      id: "user-fii-2",
+      name: "BluePeak Ventures",
+      email: "fii2@ideaipo.com",
+      password: "fii",
+      token: "394820",
+      role: "FII",
+      status: "ACTIVE",
+      startingCapital: 5000000,
+      currentBalance: 5000000,
+      totalInvested: 0,
+      isOnline: false,
+    },
+    {
+      id: "user-fii-3",
+      name: "Titan Angel Syndicate",
+      email: "fii3@ideaipo.com",
+      password: "fii",
+      token: "620174",
+      role: "FII",
+      status: "ACTIVE",
+      startingCapital: 7500000,
+      currentBalance: 7500000,
+      totalInvested: 0,
+      isOnline: false,
+    },
+    {
+      id: "user-retail-1",
+      name: "Rahul Verma",
+      email: "retail1@ideaipo.com",
+      password: "retail",
+      token: "739214",
+      role: "RETAIL",
+      status: "ACTIVE",
+      startingCapital: 500000,
+      currentBalance: 500000,
+      totalInvested: 0,
+      isOnline: true,
+    },
+    {
+      id: "user-retail-2",
+      name: "Priya Sharma",
+      email: "retail2@ideaipo.com",
+      password: "retail",
+      token: "482051",
+      role: "RETAIL",
+      status: "ACTIVE",
+      startingCapital: 500000,
+      currentBalance: 500000,
+      totalInvested: 0,
+      isOnline: false,
+    },
+    {
+      id: "user-retail-3",
+      name: "Aditya Kumar",
+      email: "retail3@ideaipo.com",
+      password: "retail",
+      token: "915638",
+      role: "RETAIL",
+      status: "ACTIVE",
+      startingCapital: 500000,
+      currentBalance: 500000,
+      totalInvested: 0,
+      isOnline: false,
+    },
+    {
+      id: "user-founder-1",
+      name: "Aarav Mehta (FinFlow)",
+      email: "founder.finflow@ideaipo.com",
+      password: "startup",
+      token: "529461",
+      role: "STARTUP",
+      status: "ACTIVE",
+      startingCapital: 0,
+      currentBalance: 0,
+      totalInvested: 0,
+      isOnline: true,
+      startupId: "startup-finflow",
+    },
+    {
+      id: "cmv0rwhx30000dk7ml1ch3dol",
+      name: "Bhavishy Sankhla",
+      email: "07bhavishysankhla@gmail.com",
+      password: "ipo2026",
+      token: "102938",
+      role: "STARTUP",
+      status: "ACTIVE",
+      startingCapital: 0,
+      currentBalance: 0,
+      totalInvested: 0,
+      isOnline: true,
+    },
+    {
+      id: "cmuwhql5900ahm5yi6c2uxh1c",
+      name: "Mohit enterprises",
+      email: "investir@gmail.com",
+      password: "650822",
+      token: "650822",
+      role: "STARTUP",
+      status: "ACTIVE",
+      startingCapital: 0,
+      currentBalance: 0,
+      totalInvested: 0,
+      isOnline: true,
+    },
+  ];
+
+  console.log(`[1/4] Ensuring core users exist...`);
+  for (const u of coreUsers) {
+    const existing = await prisma.user.findUnique({ where: { email: u.email } });
+    if (!existing) {
+      await prisma.user.create({ data: u });
+    }
+  }
+
+  // 2. Audience Members - Fast batch insertion with createMany skipDuplicates
+  console.log(`[2/4] Ensuring all 153 audience members exist...`);
+  const audienceList = (audienceTokens as Array<{
+    sNo: number;
+    name: string;
+    token: string;
+    role: string;
+    email: string;
+    startingCapital: number;
+    currentBalance: number;
+  }>);
+
+  const audienceRecords = audienceList.map((aud) => {
+    const padNum = String(aud.sNo).padStart(3, "0");
+    return {
+      id: `user-audience-${padNum}`,
+      name: aud.name,
+      email: aud.email,
+      password: aud.token,
+      token: aud.token,
+      role: "RETAIL",
+      status: "ACTIVE",
+      startingCapital: aud.startingCapital || 500000,
+      currentBalance: aud.currentBalance || 500000,
+      totalInvested: 0,
+      isOnline: false,
+    };
   });
 
-  // 3. Startups / Teams
-  const startups = [
+  const createRes = await prisma.user.createMany({
+    data: audienceRecords,
+    skipDuplicates: true,
+  });
+  console.log(` - Fast batch created new audience records: ${createRes.count}`);
+
+  // 3. Teams (Startups)
+  console.log(`[3/4] Restoring Teams / Startups...`);
+  const teamsToRestore = [
     {
       id: "startup-campus-efix-1791404076617",
       name: "Campus Efix",
@@ -68,40 +230,12 @@ export async function seedDatabase() {
       dayLow: 100,
       totalShares: 50000,
       initialValuation: 5000000,
-    },
-    {
-      id: "startup-campus-fix",
-      name: "Campus Fix",
-      slug: "campus-fix",
-      logoUrl: null,
-      tagLine: "College health is our health",
-      industry: "AI & DeepTech",
-      problem: "Complaint and maintenance tracking for college facilities",
-      solution: "Real-time complaint tracking and SLA management for campus operations",
-      businessModel: "B2B / B2C Revenue Generation & Scalable Unit Economics",
-      targetMarket: "Domestic & International Enterprise/Consumer Markets",
-      fundingAsk: 10000000,
-      equityOffered: 10,
-      pitchSummary: "Complaint resolution and infrastructure management platform.",
-      pitchDeckUrl: null,
-      teamMembers: JSON.stringify([
-        {
-          name: "Bhavik",
-          role: "Founder / Lead Presenter",
-          avatar: "",
-          bio: "Pioneering Campus Fix",
-        },
-      ]),
-      pitchOrder: 2,
-      ipoStatus: "IPO_OPEN",
-      initialPrice: 100,
-      currentPrice: 148.54,
-      previousPrice: 128.44,
-      openPrice: 100,
-      dayHigh: 148.54,
-      dayLow: 100,
-      totalShares: 1000000,
-      initialValuation: 100000000,
+      totalInvestmentReceived: 0,
+      retailInvestment: 0,
+      fiiInvestment: 0,
+      investorCount: 0,
+      totalVolume: 0,
+      isSuspended: false,
     },
     {
       id: "startup-finflow",
@@ -132,7 +266,7 @@ export async function seedDatabase() {
           bio: "PhD in Distributed Systems from IIT Bombay; 2 patents in distributed settlement channels.",
         },
       ]),
-      pitchOrder: 3,
+      pitchOrder: 2,
       ipoStatus: "IPO_OPEN",
       initialPrice: 100,
       currentPrice: 100,
@@ -142,6 +276,12 @@ export async function seedDatabase() {
       dayLow: 100,
       totalShares: 1000000,
       initialValuation: 100000000,
+      totalInvestmentReceived: 0,
+      retailInvestment: 0,
+      fiiInvestment: 0,
+      investorCount: 0,
+      totalVolume: 0,
+      isSuspended: false,
     },
     {
       id: "startup-greengo",
@@ -172,7 +312,7 @@ export async function seedDatabase() {
           bio: "Scaled logistics networks across 12 cities at Delhivery and Porter.",
         },
       ]),
-      pitchOrder: 4,
+      pitchOrder: 3,
       ipoStatus: "IPO_OPEN",
       initialPrice: 100,
       currentPrice: 100,
@@ -182,6 +322,12 @@ export async function seedDatabase() {
       dayLow: 100,
       totalShares: 1500000,
       initialValuation: 150000000,
+      totalInvestmentReceived: 0,
+      retailInvestment: 0,
+      fiiInvestment: 0,
+      investorCount: 0,
+      totalVolume: 0,
+      isSuspended: false,
     },
     {
       id: "startup-healthai",
@@ -212,7 +358,7 @@ export async function seedDatabase() {
           bio: "Ex-DeepMind research scientist focused on low-compute computer vision models.",
         },
       ]),
-      pitchOrder: 5,
+      pitchOrder: 4,
       ipoStatus: "IPO_OPEN",
       initialPrice: 100,
       currentPrice: 100,
@@ -222,6 +368,12 @@ export async function seedDatabase() {
       dayLow: 100,
       totalShares: 800000,
       initialValuation: 80000000,
+      totalInvestmentReceived: 0,
+      retailInvestment: 0,
+      fiiInvestment: 0,
+      investorCount: 0,
+      totalVolume: 0,
+      isSuspended: false,
     },
     {
       id: "startup-eduspark",
@@ -252,7 +404,7 @@ export async function seedDatabase() {
           bio: "Stanford learning design graduate; former pedagogy lead at Coursera.",
         },
       ]),
-      pitchOrder: 6,
+      pitchOrder: 5,
       ipoStatus: "IPO_OPEN",
       initialPrice: 100,
       currentPrice: 100,
@@ -262,216 +414,85 @@ export async function seedDatabase() {
       dayLow: 100,
       totalShares: 500000,
       initialValuation: 50000000,
-    },
-  ];
-  for (const startup of startups) {
-    await prisma.startup.create({ data: startup });
-  }
-
-  // 4. Seed Users (Matching Spec §11 Credentials Table exactly)
-  const users = [
-    {
-      id: "user-admin",
-      name: "Event Director",
-      email: "admin@ideaipo.com",
-      password: "Bhavishy@2007",
-      token: null,
-      role: "ADMIN",
-      status: "ACTIVE",
-      startingCapital: 0,
-      currentBalance: 0,
-      totalInvested: 0,
-      isOnline: true,
-    },
-    {
-      id: "user-fii-1",
-      name: "Nexus Horizon Capital",
-      email: "fii1@ideaipo.com",
-      password: "fii",
-      token: "837195",
-      role: "FII",
-      status: "ACTIVE",
-      startingCapital: 10000000, // ₹1 Cr
-      currentBalance: 10000000,
-      totalInvested: 0,
-      isOnline: true,
-    },
-    {
-      id: "user-fii-2",
-      name: "BluePeak Ventures",
-      email: "fii2@ideaipo.com",
-      password: "fii",
-      token: "394820",
-      role: "FII",
-      status: "ACTIVE",
-      startingCapital: 5000000, // ₹50 Lakhs
-      currentBalance: 5000000,
-      totalInvested: 0,
-      isOnline: false,
-    },
-    {
-      id: "user-fii-3",
-      name: "Titan Angel Syndicate",
-      email: "fii3@ideaipo.com",
-      password: "fii",
-      token: "620174",
-      role: "FII",
-      status: "ACTIVE",
-      startingCapital: 7500000, // ₹75 Lakhs
-      currentBalance: 7500000,
-      totalInvested: 0,
-      isOnline: false,
-    },
-    {
-      id: "user-retail-1",
-      name: "Rahul Verma",
-      email: "retail1@ideaipo.com",
-      password: "retail",
-      token: "739214",
-      role: "RETAIL",
-      status: "ACTIVE",
-      startingCapital: 500000, // ₹5 Lakhs
-      currentBalance: 500000,
-      totalInvested: 0,
-      isOnline: true,
-    },
-    {
-      id: "user-retail-2",
-      name: "Priya Sharma",
-      email: "retail2@ideaipo.com",
-      password: "retail",
-      token: "482051",
-      role: "RETAIL",
-      status: "ACTIVE",
-      startingCapital: 500000, // ₹5 Lakhs
-      currentBalance: 500000,
-      totalInvested: 0,
-      isOnline: false,
-    },
-    {
-      id: "user-retail-3",
-      name: "Aditya Kumar",
-      email: "retail3@ideaipo.com",
-      password: "retail",
-      token: "915638",
-      role: "RETAIL",
-      status: "ACTIVE",
-      startingCapital: 500000, // ₹5 Lakhs
-      currentBalance: 500000,
-      totalInvested: 0,
-      isOnline: false,
-    },
-    {
-      id: "user-founder-1",
-      name: "Aarav Mehta (FinFlow)",
-      email: "founder.finflow@ideaipo.com",
-      password: "startup",
-      token: "529461",
-      role: "STARTUP",
-      status: "ACTIVE",
-      startingCapital: 0,
-      currentBalance: 0,
-      totalInvested: 0,
-      isOnline: true,
-      startupId: "startup-finflow",
+      totalInvestmentReceived: 0,
+      retailInvestment: 0,
+      fiiInvestment: 0,
+      investorCount: 0,
+      totalVolume: 0,
+      isSuspended: false,
     },
   ];
 
-  // Append all 150 Audience accounts from audience-tokens.json
-  for (const aud of (audienceTokens as Array<{ sNo: number; name: string; token: string; email: string; startingCapital: number; currentBalance: number }>)) {
-    if (aud.email.startsWith("audience")) {
-      const padNum = String(aud.sNo).padStart(3, "0");
-      users.push({
-        id: `user-audience-${padNum}`,
-        name: aud.name,
-        email: aud.email,
-        password: aud.token,
-        token: aud.token,
-        role: "RETAIL",
-        status: "ACTIVE",
-        startingCapital: aud.startingCapital,
-        currentBalance: aud.currentBalance,
-        totalInvested: 0,
-        isOnline: false,
-      } as any);
-    }
-  }
-
-  await prisma.user.createMany({
-    data: users,
-    skipDuplicates: true,
-  });
-
-  // 5. Seed Final Awards
-  const awards = [
-    {
-      awardKey: "CHAMPION",
-      awardName: "IPO Grand Champion",
-      metric: "Highest Overall Valuation & Market Confidence",
-      isPublic: true,
-      confirmedByAdmin: false,
-    },
-    {
-      awardKey: "MOST_FUNDED",
-      awardName: "Top Gross Capital Raised",
-      metric: "Cumulative Gross Inflow Across All Tiers",
-      isPublic: true,
-      confirmedByAdmin: false,
-    },
-    {
-      awardKey: "HIGHEST_FII",
-      awardName: "Institutional Choice Award",
-      metric: "Maximum Institutional VC Cheque Volume",
-      isPublic: true,
-      confirmedByAdmin: false,
-    },
-    {
-      awardKey: "RETAIL_CHOICE",
-      awardName: "Audience Retail Favorite",
-      metric: "Most Broadly Distributed Retail Cap Table",
-      isPublic: true,
-      confirmedByAdmin: false,
-    },
-    {
-      awardKey: "MOST_OVERSUBSCRIBED",
-      awardName: "Highest Oversubscription Multiple",
-      metric: "Total Funds Raised relative to Initial Ask",
-      isPublic: true,
-      confirmedByAdmin: false,
-    },
-  ];
-
-  for (const award of awards) {
-    await prisma.finalAward.create({ data: award });
-  }
-
-  // 6. Initial Activity Feed Notification
-  await prisma.activityFeed.create({
-    data: {
-      type: "ADMIN_ACTION",
-      message: "Vision Club Live Auditorium Edition trading floor initialized successfully.",
-      isPublic: true,
-    },
-  });
-
-  // 7. Seed Initial Market Liquidity for Open IPOs
-  for (const s of startups) {
-    if (s.ipoStatus === "IPO_OPEN") {
-      await seedMarketLiquidityForStartup(s.id);
-    }
-  }
-
-  console.log("✅ Seeding completed with 4 startups, 8 users, 5 awards, and initial market liquidity!");
-}
-
-if (require.main === module) {
-  seedDatabase()
-    .then(async () => {
-      await prisma.$disconnect();
-    })
-    .catch(async (e) => {
-      console.error(e);
-      await prisma.$disconnect();
-      process.exit(1);
+  for (const team of teamsToRestore) {
+    await prisma.startup.upsert({
+      where: { slug: team.slug },
+      update: {
+        name: team.name,
+        fundingAsk: team.fundingAsk,
+        equityOffered: team.equityOffered,
+        industry: team.industry,
+        tagLine: team.tagLine,
+        pitchOrder: team.pitchOrder,
+        ipoStatus: team.ipoStatus,
+        totalShares: team.totalShares,
+        initialValuation: team.initialValuation,
+      },
+      create: team,
     });
+    console.log(` - Team restored: ${team.name} (${team.slug})`);
+  }
+
+  // 4. Ensure Global Market State
+  console.log(`[4/4] Setting Global Market State & Initial Market Liquidity...`);
+  await prisma.marketState.upsert({
+    where: { id: "global" },
+    update: {
+      isMarketActive: true,
+      activeStartupId: "startup-campus-efix-1791404076617",
+    },
+    create: {
+      id: "global",
+      isMarketActive: true,
+      activeStartupId: "startup-campus-efix-1791404076617",
+      hideInvestorNamesPublicly: false,
+      bannerMessage: "Welcome to IDEA TO IPO — Live Auditorium Pitch & Capital Exchange",
+    },
+  });
+
+  // Seed liquidity for open startups
+  const openStartups = await prisma.startup.findMany({
+    where: { ipoStatus: "IPO_OPEN" },
+  });
+
+  for (const s of openStartups) {
+    console.log(` - Seeding AMM order book liquidity for ${s.name}...`);
+    try {
+      await seedMarketLiquidityForStartup(s.id);
+    } catch (e: any) {
+      console.warn(`Could not seed liquidity for ${s.name}: ${e.message}`);
+    }
+  }
+
+  invalidateCache();
+
+  // Verification
+  const totalUsers = await prisma.user.count();
+  const totalStartups = await prisma.startup.count();
+  const retailUsers = await prisma.user.count({ where: { role: "RETAIL" } });
+
+  console.log("==================================================================");
+  console.log(`🎉 RESTORATION COMPLETED SUCCESSFULLY!`);
+  console.log(` - Total Users: ${totalUsers}`);
+  console.log(` - Retail / Audience Users: ${retailUsers}`);
+  console.log(` - Total Startups / Teams: ${totalStartups}`);
+  console.log("==================================================================");
 }
+
+main()
+  .catch((e) => {
+    console.error("Restoration error:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

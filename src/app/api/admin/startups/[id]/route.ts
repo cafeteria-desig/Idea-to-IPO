@@ -10,9 +10,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = params;
-    const body = await req.json().catch(() => ({}));
-    const adminId = body.adminId || req.nextUrl.searchParams.get("adminId") || req.headers.get("x-user-id");
-    const admin = await getAdminUser(req, adminId || undefined);
+    const admin = await getAdminUser(req);
     if (!admin) {
       return NextResponse.json(
         { success: false, message: "Forbidden: Admin privileges required" },
@@ -66,17 +64,16 @@ export async function DELETE(
           action: "DELETE_STARTUP",
           targetType: "STARTUP",
           targetId: startup!.id,
-          reason: `Admin deleted startup team "${startup!.name}" (Pitch #${startup!.pitchOrder})`,
+          reason: `Deleted pitch #${startup!.pitchOrder} ${startup!.name} from the exchange.`,
         },
       });
-    }, {
-      maxWait: 10000,
-      timeout: 30000,
     });
+
+    invalidateCache();
 
     return NextResponse.json({
       success: true,
-      message: `Team "${startup.name}" has been permanently removed.`,
+      message: `Team "${startup.name}" deleted from exchange.`,
     });
   } catch (error: any) {
     console.error("Delete startup error:", error);
@@ -94,7 +91,7 @@ export async function PUT(
   try {
     const { id } = params;
     const body = await req.json().catch(() => ({}));
-    const admin = await getAdminUser(req, body.adminId);
+    const admin = await getAdminUser(req);
     if (!admin) {
       return NextResponse.json(
         { success: false, message: "Forbidden: Admin privileges required" },
@@ -131,6 +128,7 @@ export async function PUT(
       businessModel,
       targetMarket,
       ipoStatus,
+      token,
     } = body;
 
     const updateData: any = {};
@@ -150,6 +148,15 @@ export async function PUT(
     if (equityOffered !== undefined) updateData.equityOffered = Number(equityOffered);
     if (pitchOrder !== undefined) updateData.pitchOrder = Number(pitchOrder);
     if (ipoStatus) updateData.ipoStatus = ipoStatus;
+
+    if (token && /^\d{6}$/.test(String(token).trim())) {
+      const cleanToken = String(token).trim();
+      updateData.token = cleanToken;
+      await prisma.user.updateMany({
+        where: { startupId: startup.id, role: "STARTUP" },
+        data: { token: cleanToken, password: cleanToken },
+      });
+    }
 
     if (totalShares !== undefined && Number(totalShares) > 0) {
       updateData.totalShares = Math.floor(Number(totalShares));

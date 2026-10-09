@@ -49,6 +49,12 @@ import {
   ArrowUpRight,
   ShieldAlert,
   FileText,
+  Key,
+  Copy,
+  Check,
+  Lock,
+  Sparkles,
+  BarChart3,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TeamReportModal } from "@/components/TeamReportModal";
@@ -67,6 +73,13 @@ export default function StockDetailPage() {
 
   const [startup, setStartup] = useState<StartupItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tokenCopied, setTokenCopied] = useState(false);
+  const [restrictedData, setRestrictedData] = useState<{
+    isRestricted?: boolean;
+    message?: string;
+    myStartupSlug?: string | null;
+    myStartupName?: string | null;
+  } | null>(null);
 
   // Trading Ticket State (Groww Style)
   const [tradeSide, setTradeSide] = useState<"BUY" | "SELL">("BUY");
@@ -94,9 +107,17 @@ export default function StockDetailPage() {
     if (!slug) return;
     try {
       const res = await fetch(`/api/startups/${slug}`, { cache: "no-store" });
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({}));
+        setRestrictedData(data);
+        setStartup(null);
+        setLoading(false);
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setStartup(data);
+        setRestrictedData(null);
         if (!limitPriceSetRef.current && data.currentPrice) {
           limitPriceSetRef.current = true;
           setLimitPrice(data.currentPrice);
@@ -298,6 +319,38 @@ export default function StockDetailPage() {
     );
   }
 
+  if (restrictedData) {
+    return (
+      <div className="py-20 max-w-lg mx-auto text-center space-y-6">
+        <div className="h-16 w-16 rounded-3xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 shadow-xl">
+          <Lock className="h-8 w-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black text-white">Company Isolation Active</h2>
+          <p className="text-xs font-mono text-zinc-400 leading-relaxed">
+            {restrictedData.message ||
+              "Under exchange governance, company founder accounts are restricted to viewing only their own company's performance stats."}
+          </p>
+        </div>
+        {restrictedData.myStartupSlug ? (
+          <Button
+            onClick={() => router.push(`/startup/${restrictedData.myStartupSlug}`)}
+            className="font-mono text-xs font-bold bg-cyan-500 text-black hover:bg-cyan-400 gap-2 shadow-lg shadow-cyan-500/25"
+          >
+            Go to My Company Page ({restrictedData.myStartupName || "My Venture"})
+          </Button>
+        ) : (
+          <Button
+            onClick={() => router.push("/teams")}
+            className="font-mono text-xs font-bold bg-white/10 text-white hover:bg-white/20"
+          >
+            Return to Teams
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   if (!startup) {
     return (
       <div className="py-20 text-center space-y-4">
@@ -373,6 +426,25 @@ export default function StockDetailPage() {
               <span className="rounded-md bg-white/10 px-2.5 py-0.5 text-xs font-mono font-bold text-zinc-300">
                 PITCH #{startup.pitchOrder}
               </span>
+              {startup.token && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(startup.token || "");
+                    setTokenCopied(true);
+                    setTimeout(() => setTokenCopied(false), 2000);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/15 border border-amber-500/35 px-2.5 py-0.5 text-xs font-mono font-bold text-amber-300 hover:bg-amber-500/25 transition-all shadow-sm"
+                  title="Click to copy Company Access Token"
+                >
+                  <Key className="h-3 w-3" /> Token #{startup.token}
+                  {tokenCopied ? (
+                    <Check className="h-3 w-3 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3 w-3 text-amber-400/60" />
+                  )}
+                </button>
+              )}
               <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">
                 {startup.industry}
               </span>
@@ -594,35 +666,164 @@ export default function StockDetailPage() {
           )}
         </div>
 
-        {/* Right Column (1 Col): Groww Trading Terminal + Current Position Card */}
+        {/* Right Column (1 Col): Groww Trading Terminal (Investors) OR Founder Performance Console (Founders) */}
         <div className="space-y-6">
-          {/* Groww-Inspired Order Execution Ticket */}
-          <Card className="glass-panel-premium p-5 sm:p-7 border-white/15 sticky top-24 shadow-2xl">
-            {/* BUY / SELL Switcher */}
-            <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-black/40 border border-white/10 mb-6">
-              <button
+          {user?.role === "STARTUP" ? (
+            /* Dedicated Founder Performance Command Console */
+            <Card className="glass-panel-premium p-5 sm:p-7 border-cyan-500/30 sticky top-24 shadow-2xl bg-gradient-to-b from-[#0a1224]/95 to-[#060a14]/95">
+              <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-5">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-9 w-9 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shadow-inner">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Founder Command Console</h3>
+                    <span className="text-[10px] font-mono text-cyan-300">Live Venture Analytics & Cap Table</span>
+                  </div>
+                </div>
+                {startup.token && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(startup.token || "");
+                      setTokenCopied(true);
+                      setTimeout(() => setTokenCopied(false), 2000);
+                    }}
+                    className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-300 font-mono text-xs font-bold hover:bg-amber-500/25 transition-all shadow-sm"
+                    title="Click to copy Company Access Token"
+                  >
+                    <Key className="h-3 w-3" /> Token #{startup.token}
+                    {tokenCopied ? (
+                      <Check className="h-3 w-3 text-emerald-400" />
+                    ) : (
+                      <Copy className="h-3 w-3 text-amber-400/60" />
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {/* Funding Progress Meter */}
+              <div className="space-y-2 mb-6 p-4 rounded-2xl bg-white/[0.03] border border-white/10">
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-zinc-400 font-semibold">Funding Target Progress</span>
+                  <span className="text-emerald-400 font-bold">{Math.round((sub.ratio || 0) * 100)}% Subscribed</span>
+                </div>
+                <div className="h-2.5 w-full rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 rounded-full transition-all duration-500 shadow-sm"
+                    style={{ width: `${Math.min(100, Math.round((sub.ratio || 0) * 100))}%` }}
+                  />
+                </div>
+                <div className="flex justify-between items-center text-[11px] font-mono pt-1">
+                  <span className="text-white font-bold">{formatINR(startup.totalInvestmentReceived)}</span>
+                  <span className="text-zinc-400">Target Ask: {formatINR(startup.fundingAsk)}</span>
+                </div>
+              </div>
+
+              {/* Performance Metrics Grid */}
+              <div className="grid grid-cols-2 gap-2.5 mb-6">
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/10">
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase block">Retail Investors</span>
+                  <span className="text-sm font-mono font-bold text-white block mt-0.5">
+                    {formatINR(startup.retailInvestment || 0)}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/10">
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase block">Institutional (FII)</span>
+                  <span className="text-sm font-mono font-bold text-cyan-300 block mt-0.5">
+                    {formatINR(startup.fiiInvestment || 0)}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/10">
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase block">Total Backers</span>
+                  <span className="text-sm font-mono font-bold text-emerald-400 block mt-0.5">
+                    {startup.investorCount || 0} Investors
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/10">
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase block">Market Valuation</span>
+                  <span className="text-sm font-mono font-bold text-amber-300 block mt-0.5">
+                    {formatINR((startup.totalShares || 1000000) * currentPrice)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Cap Table & Investor Backers */}
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-wider">
+                    Investor Backers (Cap Table)
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-500">
+                    {startup.investments?.length || 0} Bids
+                  </span>
+                </div>
+
+                {startup.investments && startup.investments.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {startup.investments.slice(0, 8).map((inv: any, idx: number) => (
+                      <div
+                        key={inv.id || idx}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/5 text-xs font-mono"
+                      >
+                        <div>
+                          <span className="text-white font-semibold block">
+                            {inv.investorName || `Investor #${idx + 1}`}
+                          </span>
+                          <span className="text-[10px] text-zinc-500 uppercase">
+                            {inv.investorType || "INVESTOR"}
+                          </span>
+                        </div>
+                        <span className="text-emerald-400 font-bold">
+                          {formatINR(inv.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 text-center text-xs font-mono text-zinc-500">
+                    No bids received yet. Bids placed by audience/judges will appear here in real-time.
+                  </div>
+                )}
+              </div>
+
+              <Button
                 type="button"
-                onClick={() => setTradeSide("BUY")}
-                className={`py-2.5 rounded-xl font-mono text-xs font-black transition-all ${
-                  tradeSide === "BUY"
-                    ? "bg-gradient-to-r from-emerald-500 to-teal-400 text-black shadow-lg shadow-emerald-500/25"
-                    : "text-zinc-400 hover:text-white"
-                }`}
+                onClick={() => setReportModalOpen(true)}
+                className="w-full font-mono text-xs font-bold bg-cyan-500 text-black hover:bg-cyan-400 gap-1.5 shadow-md shadow-cyan-500/20 py-2.5"
               >
-                BUY SHARES
-              </button>
-              <button
-                type="button"
-                onClick={() => setTradeSide("SELL")}
-                className={`py-2.5 rounded-xl font-mono text-xs font-black transition-all ${
-                  tradeSide === "SELL"
-                    ? "bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-lg shadow-rose-500/25"
-                    : "text-zinc-400 hover:text-white"
-                }`}
-              >
-                SELL SHARES
-              </button>
-            </div>
+                <FileText className="h-4 w-4" /> Open Full Cap Table & Pitch Report
+              </Button>
+            </Card>
+          ) : (
+            <>
+              {/* Groww-Inspired Order Execution Ticket */}
+              <Card className="glass-panel-premium p-5 sm:p-7 border-white/15 sticky top-24 shadow-2xl">
+                {/* BUY / SELL Switcher */}
+                <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-black/40 border border-white/10 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => setTradeSide("BUY")}
+                    className={`py-2.5 rounded-xl font-mono text-xs font-black transition-all ${
+                      tradeSide === "BUY"
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-400 text-black shadow-lg shadow-emerald-500/25"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    BUY SHARES
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTradeSide("SELL")}
+                    className={`py-2.5 rounded-xl font-mono text-xs font-black transition-all ${
+                      tradeSide === "SELL"
+                        ? "bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-lg shadow-rose-500/25"
+                        : "text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    SELL SHARES
+                  </button>
+                </div>
 
             {/* Order Type Toggle: Market vs Limit */}
             <div className="flex items-center justify-between mb-4">
@@ -871,6 +1072,8 @@ export default function StockDetailPage() {
               </div>
             )}
           </Card>
+          </>
+        )}
         </div>
       </div>
 

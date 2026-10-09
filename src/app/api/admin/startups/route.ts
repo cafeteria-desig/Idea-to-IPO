@@ -36,6 +36,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const admin = await getAdminUser(req);
+    if (!admin) {
+      return NextResponse.json(
+        { success: false, message: "Forbidden: Only authenticated administrators can register startup teams." },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const {
       name,
@@ -59,17 +67,8 @@ export async function POST(req: NextRequest) {
       teamMembers,
       logoUrl,
       pitchDeckUrl,
-      adminId,
+      token: customToken,
     } = body;
-
-    const effectiveAdminId = adminId || req.nextUrl.searchParams.get("adminId") || req.headers.get("x-user-id");
-    const admin = await getAdminUser(req, effectiveAdminId || undefined);
-    if (!admin) {
-      return NextResponse.json(
-        { success: false, message: "Forbidden: Only administrators can register startup teams." },
-        { status: 403 }
-      );
-    }
 
     // 1. Validate required fields
     if (!name || typeof name !== "string" || !name.trim()) {
@@ -125,7 +124,40 @@ export async function POST(req: NextRequest) {
       slug = `${baseSlug}-${counter}`;
     }
 
-    // 3. Determine pitch order
+    // 3. Generate or validate unique 6-digit access token for this company / idea
+    let startupToken = customToken ? String(customToken).trim() : "";
+    if (!startupToken || !/^\d{6}$/.test(startupToken)) {
+      let isUnique = false;
+      while (!isUnique) {
+        startupToken = String(Math.floor(100000 + Math.random() * 900000));
+        const [existingStartup, existingUser] = await Promise.all([
+          prisma.startup.findUnique({ where: { token: startupToken } }),
+          prisma.user.findFirst({ where: { token: startupToken } }),
+        ]);
+        if (!existingStartup && !existingUser) {
+          isUnique = true;
+        }
+      }
+    } else {
+      // Validate uniqueness if supplied
+      const [existingStartup, existingUser] = await Promise.all([
+        prisma.startup.findUnique({ where: { token: startupToken } }),
+        prisma.user.findFirst({ where: { token: startupToken } }),
+      ]);
+      if (existingStartup || existingUser) {
+        let isUnique = false;
+        while (!isUnique) {
+          startupToken = String(Math.floor(100000 + Math.random() * 900000));
+          const [s, u] = await Promise.all([
+            prisma.startup.findUnique({ where: { token: startupToken } }),
+            prisma.user.findFirst({ where: { token: startupToken } }),
+          ]);
+          if (!s && !u) isUnique = true;
+        }
+      }
+    }
+
+    // 4. Determine pitch order
     let finalOrder = Number(pitchOrder);
     if (!finalOrder || isNaN(finalOrder) || finalOrder <= 0) {
       const highest = await prisma.startup.findFirst({
@@ -141,13 +173,14 @@ export async function POST(req: NextRequest) {
     const finalSolution = (solution || coreIdea).trim();
     const finalStatus = ipoStatus || "IPO_OPEN";
 
-    // 4. Create startup in DB
+    // 5. Create startup in DB with dedicated Token Number
     const startupId = `startup-${slug}`;
     const newStartup = await prisma.startup.create({
       data: {
         id: startupId,
         name: name.trim(),
         slug,
+        token: startupToken,
         tagLine: finalTagline,
         industry: finalIndustry,
         problem: finalProblem,
@@ -188,7 +221,38 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 5. Non-blocking background post-processing (liquidity seeding, audit logs, activity feed)
+    // 6. Auto-provision founder login account linked to this token & company
+    const founderEmail = `founder.${slug}@ideaipo.com`;
+    try {
+      await prisma.user.upsert({
+        where: { email: founderEmail },
+        update: {
+          name: founderName ? `${founderName.trim()} (${newStartup.name})` : `${newStartup.name} Founder`,
+          token: startupToken,
+          password: startupToken,
+          startupId: newStartup.id,
+          role: "STARTUP",
+          status: "ACTIVE",
+        },
+        create: {
+          name: founderName ? `${founderName.trim()} (${newStartup.name})` : `${newStartup.name} Founder`,
+          email: founderEmail,
+          password: startupToken,
+          token: startupToken,
+          role: "STARTUP",
+          status: "ACTIVE",
+          startupId: newStartup.id,
+          startingCapital: 0,
+          currentBalance: 0,
+          totalInvested: 0,
+          isOnline: false,
+        },
+      });
+    } catch (uErr) {
+      console.warn("Founder account provisioning note:", uErr);
+    }
+
+    // 7. Non-blocking background post-processing (liquidity seeding, audit logs, activity feed)
     (async () => {
       try {
         if (newStartup.ipoStatus === "IPO_OPEN") {
@@ -209,13 +273,13 @@ export async function POST(req: NextRequest) {
             action: "REGISTER_STARTUP",
             targetType: "STARTUP",
             targetId: newStartup.id,
-            reason: `Registered pitch #${newStartup.pitchOrder} ${newStartup.name} (${newStartup.industry}) | Ask: ₹${newStartup.fundingAsk} | Share Value: ₹${newStartup.currentPrice} | Status: ${newStartup.ipoStatus}`,
+            reason: `Registered pitch #${newStartup.pitchOrder} ${newStartup.name} (${newStartup.industry}) | Token: #${startupToken} | Ask: ₹${newStartup.fundingAsk} | Share Value: ₹${newStartup.currentPrice} | Status: ${newStartup.ipoStatus}`,
           },
         });
         await prisma.activityFeed.create({
           data: {
             type: "IPO_STATUS",
-            message: `New venture registered: ${newStartup.name} (Pitch #${newStartup.pitchOrder}) is now ready!`,
+            message: `New venture registered: ${newStartup.name} (Pitch #${newStartup.pitchOrder}, Token #${startupToken}) is now ready!`,
             startupName: newStartup.name,
             isPublic: true,
           },
@@ -229,8 +293,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Team "${newStartup.name}" successfully registered and live on the exchange!`,
+      message: `Team "${newStartup.name}" successfully registered with Company Token #${startupToken}!`,
       startup: newStartup,
+      token: startupToken,
     });
   } catch (error: any) {
     console.error("Admin register startup error:", error);

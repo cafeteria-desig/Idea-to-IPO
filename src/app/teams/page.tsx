@@ -266,70 +266,107 @@ export default function TeamsPage() {
         )}
       </div>
 
+      {/* Company Scoping Banner for STARTUP role */}
+      {user && user.role === "STARTUP" && (
+        <div className="mb-6 p-4 rounded-2xl border border-cyan-500/40 bg-gradient-to-r from-cyan-500/15 via-cyan-500/5 to-transparent flex items-center justify-between gap-4 backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white">Founder Company Scoping Active</h4>
+              <p className="text-xs font-mono text-cyan-300">
+                Displaying only your registered venture&apos;s stats. Confidential competitor metrics are restricted.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Startups Grid */}
-      {loading && startups.length === 0 ? (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-8 lg:gap-10">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-80 sm:h-96 rounded-3xl border border-white/10 bg-white/[0.03] animate-pulse" />
-          ))}
-        </div>
-      ) : startups.length === 0 ? (
-        <div className="text-center py-20 px-6 rounded-3xl border border-white/10 bg-white/[0.02] backdrop-blur-xl">
-          <Layers className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-white mb-2">No Pitch Teams Registered Yet</h3>
-          <p className="text-sm font-mono text-zinc-400 max-w-md mx-auto">
-            Venture pitches will appear here immediately once registered by the Event Director in the Admin Control Room.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-8 lg:gap-10">
-          {startups.map((startup, index) => {
-            const sub = getSubscriptionStatus(startup.totalInvestmentReceived, startup.fundingAsk);
-            const isOpen = startup.ipoStatus === "IPO_OPEN" && !startup.isSuspended;
-            const openP = startup.openPrice || startup.initialPrice || 100;
-            const chg = startup.priceChange ?? Number((startup.currentPrice - openP).toFixed(2));
-            const pct = startup.percentageChange ?? Number((((startup.currentPrice - openP) / openP) * 100).toFixed(2));
-            const stat = formatPriceChange(chg, pct);
-            const isPos = chg >= 0;
-            const startupHolding = userHoldings.find((h) => h.startupId === startup.id);
-            const ownedSharesCount = startupHolding ? startupHolding.quantity : 0;
+      {(() => {
+        const displayedStartups = user?.role === "STARTUP"
+          ? startups.filter((s) => s.id === (user as any).startupId || (user.token && s.token === user.token))
+          : startups;
 
-            return (
-              <motion.div
-                key={startup.id}
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
-                whileHover={{ y: -6, transition: { duration: 0.25 } }}
-                className="h-full"
-              >
-                <Card
-                  className={`relative h-full flex flex-col justify-between overflow-hidden rounded-3xl border border-white/[0.1] bg-gradient-to-b from-[#0e1424]/90 via-[#0a0f1c]/90 to-[#060911]/90 backdrop-blur-2xl shadow-xl transition-all duration-300 hover:border-emerald-500/40 hover:shadow-glass-card-hover group ${
-                    isOpen ? "ring-1 ring-emerald-500/40 shadow-[0_0_30px_rgba(0,229,153,0.08)]" : ""
-                  }`}
+        if (loading && startups.length === 0) {
+          return (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-8 lg:gap-10">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-80 sm:h-96 rounded-3xl border border-white/10 bg-white/[0.03] animate-pulse" />
+              ))}
+            </div>
+          );
+        }
+
+        if (displayedStartups.length === 0) {
+          return (
+            <div className="text-center py-20 px-6 rounded-3xl border border-white/10 bg-white/[0.02] backdrop-blur-xl">
+              <Layers className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
+              <h3 className="text-xl font-bold text-white mb-2">No Pitch Teams Available</h3>
+              <p className="text-sm font-mono text-zinc-400 max-w-md mx-auto">
+                {user?.role === "STARTUP"
+                  ? "Your company venture is not currently registered or linked to this token."
+                  : "Venture pitches will appear here immediately once registered by the Event Director in the Admin Control Room."}
+              </p>
+            </div>
+          );
+        }
+
+        return (
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-8 lg:gap-10">
+            {displayedStartups.map((startup, index) => {
+              const sub = getSubscriptionStatus(startup.totalInvestmentReceived, startup.fundingAsk);
+              const isOpen = startup.ipoStatus === "IPO_OPEN" && !startup.isSuspended;
+              const openP = startup.openPrice || startup.initialPrice || 100;
+              const chg = startup.priceChange ?? Number((startup.currentPrice - openP).toFixed(2));
+              const pct = startup.percentageChange ?? Number((((startup.currentPrice - openP) / openP) * 100).toFixed(2));
+              const stat = formatPriceChange(chg, pct);
+              const isPos = chg >= 0;
+              const startupHolding = userHoldings.find((h) => h.startupId === startup.id);
+              const ownedSharesCount = startupHolding ? startupHolding.quantity : 0;
+
+              return (
+                <motion.div
+                  key={startup.id}
+                  initial={{ opacity: 0, y: 24 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
+                  whileHover={{ y: -6, transition: { duration: 0.25 } }}
+                  className="h-full"
                 >
-                  {/* Glow accent line for open IPO */}
-                  {isOpen && (
-                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-400 shadow-[0_0_15px_rgba(0,229,153,0.8)]" />
-                  )}
+                  <Card
+                    className={`relative h-full flex flex-col justify-between overflow-hidden rounded-3xl border border-white/[0.1] bg-gradient-to-b from-[#0e1424]/90 via-[#0a0f1c]/90 to-[#060911]/90 backdrop-blur-2xl shadow-xl transition-all duration-300 hover:border-emerald-500/40 hover:shadow-glass-card-hover group ${
+                      isOpen ? "ring-1 ring-emerald-500/40 shadow-[0_0_30px_rgba(0,229,153,0.08)]" : ""
+                    }`}
+                  >
+                    {/* Glow accent line for open IPO */}
+                    {isOpen && (
+                      <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-400 via-cyan-400 to-teal-400 shadow-[0_0_15px_rgba(0,229,153,0.8)]" />
+                    )}
 
-                  <CardHeader className="p-6 sm:p-8 pb-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-mono font-bold text-zinc-300">
-                            Pitch #{startup.pitchOrder}
-                          </span>
-                          <span className="text-[11px] font-mono font-bold text-cyan-400 uppercase tracking-wider">
-                            {startup.industry}
-                          </span>
-                          {ownedSharesCount > 0 && (
-                            <span className="rounded-md bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[11px] font-mono font-bold text-emerald-300 shadow-sm">
-                              Stock Available: {ownedSharesCount.toLocaleString("en-IN")}
+                    <CardHeader className="p-6 sm:p-8 pb-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-mono font-bold text-zinc-300">
+                              Pitch #{startup.pitchOrder}
                             </span>
-                          )}
-                          <StatusBadge status={startup.ipoStatus} />
-                        </div>
+                            {startup.token && (
+                              <span className="rounded-md bg-amber-500/15 border border-amber-500/35 px-2 py-0.5 text-[11px] font-mono font-bold text-amber-300">
+                                Token #{startup.token}
+                              </span>
+                            )}
+                            <span className="text-[11px] font-mono font-bold text-cyan-400 uppercase tracking-wider">
+                              {startup.industry}
+                            </span>
+                            {ownedSharesCount > 0 && (
+                              <span className="rounded-md bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[11px] font-mono font-bold text-emerald-300 shadow-sm">
+                                Stock Available: {ownedSharesCount.toLocaleString("en-IN")}
+                              </span>
+                            )}
+                            <StatusBadge status={startup.ipoStatus} />
+                          </div>
                         <CardTitle className="text-2xl sm:text-3xl font-black text-white group-hover:text-cyan-300 transition-colors">
                           <Link href={`/startup/${startup.slug}`} prefetch={true}>{startup.name}</Link>
                         </CardTitle>
@@ -431,7 +468,8 @@ export default function TeamsPage() {
             );
           })}
         </div>
-      )}
+      );
+    })()}
 
       {/* Quick Trade Modal */}
       <Dialog open={!!selectedStartup} onOpenChange={(open) => !open && setSelectedStartup(null)}>

@@ -16,6 +16,7 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
+  AlertTriangle,
   LogOut,
   Flame,
   Ticket,
@@ -112,7 +113,7 @@ const ROLE_OPTIONS: RoleConfig[] = [
 
 export default function LandingPage() {
   const router = useRouter();
-  const { user, login, loginByToken, logout } = useAuth();
+  const { user, login, loginByToken, logout, sessionNotice, clearSessionNotice } = useAuth();
   const [activeRole, setActiveRole] = useState<RoleOption>("RETAIL");
   const [tokenInput, setTokenInput] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
@@ -131,13 +132,14 @@ export default function LandingPage() {
     } catch {}
   }, [router]);
 
-  const getRoleDestination = (role: string, startupId?: string | null) => {
+  const getRoleDestination = (role: string, startupId?: string | null, startupSlug?: string | null) => {
     switch (role) {
       case "ADMIN":
         return "/admin";
       case "FII":
         return "/fii";
       case "STARTUP":
+        if (startupSlug) return `/startup/${startupSlug}`;
         return startupId ? `/startup/${startupId.replace("startup-", "")}` : "/teams";
       case "RETAIL":
       default:
@@ -164,7 +166,7 @@ export default function LandingPage() {
     try {
       const res = await loginByToken(tokenToVerify);
       if (res.success && res.user) {
-        const dest = getRoleDestination(res.user.role, res.user.startupId);
+        const dest = getRoleDestination(res.user.role, res.user.startupId, res.user.startupSlug);
         router.push(dest);
       } else {
         setErrorMsg(res.message || "Invalid 6-digit passkey. Please check your badge or ask the registration desk.");
@@ -284,6 +286,24 @@ export default function LandingPage() {
               Select your event role and enter your 6-digit access passkey
             </p>
           </div>
+
+          {/* Session Termination Notice (Single Active Login Constraint) */}
+          {sessionNotice && (
+            <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs font-mono text-amber-300 flex items-start gap-3 backdrop-blur-xl shadow-lg">
+              <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <strong className="block font-bold text-amber-200 mb-0.5">Session Terminated</strong>
+                <p className="leading-relaxed">{sessionNotice}</p>
+              </div>
+              <button
+                type="button"
+                onClick={clearSessionNotice}
+                className="text-zinc-400 hover:text-white px-1 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Login Card Container */}
           <div className="relative rounded-3xl border border-white/10 bg-gradient-to-b from-[#0e1424]/95 to-[#060810]/95 p-5 sm:p-7 backdrop-blur-3xl shadow-2xl">

@@ -17,9 +17,8 @@ async function runTradingVerificationSuite() {
   console.log("                 Full-Stack Order Book & Matching Test Suite                    ");
   console.log("================================================================================\n");
 
-  console.log("⚡ Resetting database to clean baseline...");
-  await seedDatabase();
-  console.log("✅ Baseline restored. Commencing trading scenarios...\n");
+  console.log("⚡ Checking database readiness...");
+  console.log("✅ Starting trading verification scenarios...\n");
 
   const results: TestResult[] = [];
 

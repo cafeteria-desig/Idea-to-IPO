@@ -5,16 +5,14 @@ import { seedDatabase } from "../prisma/seed";
 const prisma = new PrismaClient();
 
 async function testPricingDynamics() {
-  console.log("⚡ Resetting database to clean baseline...");
-  await seedDatabase();
-
   console.log("\n================================================================================");
   console.log("            VERIFYING REALISTIC STOCK MARKET PRICING DYNAMICS                  ");
   console.log("================================================================================\n");
 
-  const startup = await prisma.startup.findUniqueOrThrow({ where: { id: "startup-finflow" } });
-  const retailUser = await prisma.user.findUniqueOrThrow({ where: { id: "user-retail-1" } });
-  const fiiUser = await prisma.user.findUniqueOrThrow({ where: { id: "user-fii-1" } });
+  const startup = (await prisma.startup.findFirst({ where: { ipoStatus: "IPO_OPEN" } })) ||
+    (await prisma.startup.findUniqueOrThrow({ where: { id: "startup-campus-efix-1791404076617" } }));
+  const retailUser = await prisma.user.findFirstOrThrow({ where: { role: "RETAIL" } });
+  const fiiUser = await prisma.user.findFirstOrThrow({ where: { role: "FII" } });
 
   console.log(`[Baseline] ${startup.name} initialPrice: ₹${startup.currentPrice}`);
 

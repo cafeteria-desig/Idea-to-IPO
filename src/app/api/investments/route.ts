@@ -10,30 +10,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { startupId, amount, userId } = body;
 
-    // Determine target user
-    let user = await getCurrentUser(req);
-    if (!user && userId) {
-      const found = await prisma.user.findUnique({ where: { id: userId } });
-      if (found && found.status !== "BLOCKED") {
-        user = {
-          id: found.id,
-          name: found.name,
-          email: found.email,
-          phone: found.phone,
-          role: found.role as any,
-          status: found.status as any,
-          startingCapital: found.startingCapital,
-          currentBalance: found.currentBalance,
-          totalInvested: found.totalInvested,
-          isOnline: found.isOnline,
-          lastActiveAt: found.lastActiveAt,
-          startupId: found.startupId,
-        };
-      }
-    }
-
+    // Determine target user strictly from authenticated session
+    const user = await getCurrentUser(req);
     if (!user) {
-      return NextResponse.json({ success: false, message: "Unauthorized: Please log in." }, { status: 401 });
+      return NextResponse.json({ success: false, message: "Unauthorized: Please log in to place bids." }, { status: 401 });
     }
 
     if (user.role !== "RETAIL" && user.role !== "FII") {

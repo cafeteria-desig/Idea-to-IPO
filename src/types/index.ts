@@ -15,6 +15,9 @@ export interface SafeUser {
   isOnline: boolean;
   lastActiveAt: string | Date;
   startupId?: string | null;
+  startupSlug?: string | null;
+  startupName?: string | null;
+  activeSessionId?: string | null;
   holdings?: {
     startupId: string;
     quantity: number;
@@ -46,6 +49,7 @@ export interface StartupItem {
   id: string;
   name: string;
   slug: string;
+  token?: string | null;
   logoUrl?: string | null;
   tagLine: string;
   industry: string;
@@ -80,6 +84,7 @@ export interface StartupItem {
   marketCap?: number;
   priceChange?: number;
   percentageChange?: number;
+  investments?: InvestmentItem[];
 }
 
 export type OrderSide = "BUY" | "SELL";

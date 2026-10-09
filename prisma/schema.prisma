@@ -23,6 +23,8 @@ model User {
   isOnline           Boolean             @default(false)
   lastActiveAt       DateTime            @default(now())
   startupId          String?
+  activeSessionId    String?
+  sessionCreatedAt   DateTime?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   investments        Investment[]
@@ -38,6 +40,7 @@ model Startup {
   id                      String         @id @default(cuid())
   name                    String
   slug                    String         @unique
+  token                   String?        @unique
   logoUrl                 String?
   tagLine                 String
   industry                String

@@ -55,6 +55,9 @@ import {
   Award,
   Flame,
   Medal,
+  Key,
+  Copy,
+  Check,
 } from "lucide-react";
 import type { StartupItem, SafeUser, InvestmentItem, AuditLogItem, FinalAwardItem, IPOStatus } from "@/types";
 import { getUserLoginToken, generateRandomToken } from "@/lib/tokens";
@@ -131,6 +134,10 @@ export default function AdminControlRoomPage() {
   const [teamFounderName, setTeamFounderName] = useState("");
   const [teamProblem, setTeamProblem] = useState("");
   const [teamSolution, setTeamSolution] = useState("");
+  const [teamToken, setTeamToken] = useState("");
+  const [tokenSuccessModalOpen, setTokenSuccessModalOpen] = useState(false);
+  const [tokenSuccessData, setTokenSuccessData] = useState<{ name: string; token: string; slug: string } | null>(null);
+  const [tokenCopiedSuccess, setTokenCopiedSuccess] = useState(false);
   const [isRegisteringTeam, setIsRegisteringTeam] = useState(false);
   const [registerTeamError, setRegisterTeamError] = useState("");
 
@@ -367,6 +374,7 @@ export default function AdminControlRoomPage() {
           founderName: teamFounderName.trim(),
           problem: teamProblem.trim() || teamIdea.trim(),
           solution: teamSolution.trim() || teamIdea.trim(),
+          token: teamToken.trim() || undefined,
         }),
       });
 
@@ -382,14 +390,24 @@ export default function AdminControlRoomPage() {
         throw new Error(data.message || `Failed to register team (HTTP ${res.status}).`);
       }
 
-      flashMessage(`🚀 Team "${data.startup?.name}" registered and live on the exchange!`);
+      const assignedToken = data.token || data.startup?.token;
+      flashMessage(`🚀 Team "${data.startup?.name}" registered with Token #${assignedToken}!`);
       setRegisterTeamModalOpen(false);
+      if (assignedToken) {
+        setTokenSuccessData({
+          name: data.startup?.name || teamName.trim(),
+          token: assignedToken,
+          slug: data.startup?.slug,
+        });
+        setTokenSuccessModalOpen(true);
+      }
       setTeamName("");
       setTeamIdea("");
       setTeamTagline("");
       setTeamFounderName("");
       setTeamProblem("");
       setTeamSolution("");
+      setTeamToken("");
       setTeamTotalShares(1000000);
       setTeamSharePrice(100);
       setTeamValuation(100000000);
@@ -1419,6 +1437,19 @@ export default function AdminControlRoomPage() {
                                 <span className="font-mono text-[11px] font-bold text-white bg-white/10 px-2 py-0.5 rounded-md">
                                   Pitch #{s.pitchOrder}
                                 </span>
+                                {s.token && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(s.token || "");
+                                      flashMessage(`Copied Token #${s.token} for ${s.name} to clipboard!`);
+                                    }}
+                                    className="font-mono text-[11px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/35 px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer hover:bg-amber-500/25 transition-all shadow-sm"
+                                    title="Click to copy Company Access Token"
+                                  >
+                                    <Key className="h-3 w-3" /> Token #{s.token}
+                                  </button>
+                                )}
                                 <span className="font-mono text-[11px] font-bold text-cyan-400 uppercase tracking-wider">
                                   {s.industry}
                                 </span>
@@ -2834,6 +2865,35 @@ export default function AdminControlRoomPage() {
               </div>
             </div>
 
+            {/* Dedicated Company Access Token Field */}
+            <div className="space-y-1.5 p-3 rounded-2xl bg-amber-500/[0.05] border border-amber-500/25">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                  <Key className="h-3.5 w-3.5" />
+                  Company Login Token
+                  <span className="text-zinc-400 font-normal text-[11px]">(Auto-generated if left blank)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setTeamToken(String(Math.floor(100000 + Math.random() * 900000)))}
+                  className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 font-bold underline"
+                >
+                  Generate Random
+                </button>
+              </div>
+              <Input
+                type="text"
+                maxLength={6}
+                placeholder="Leave blank to auto-generate (e.g. 849201)"
+                value={teamToken}
+                onChange={(e) => setTeamToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="bg-black/60 border-amber-500/30 text-xs text-amber-200 font-mono tracking-widest"
+              />
+              <span className="text-[10px] font-mono text-zinc-400 block">
+                Company founders will use this token number to log in and view their performance stats.
+              </span>
+            </div>
+
             {/* Row 2: Tagline and Industry */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -3089,6 +3149,85 @@ export default function AdminControlRoomPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* COMPANY TOKEN GENERATED MODAL */}
+      <Dialog open={tokenSuccessModalOpen} onOpenChange={setTokenSuccessModalOpen}>
+        <DialogContent className="max-w-md bg-[#0a0f1d]/95 border-emerald-500/30 text-white backdrop-blur-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-emerald-400">
+              <CheckCircle2 className="h-5 w-5" />
+              Company Registered & Token Generated!
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 font-mono text-xs">
+              This token number is the official access passkey for this company. Give this to the company representatives for logging into their page.
+            </DialogDescription>
+          </DialogHeader>
+
+          {tokenSuccessData && (
+            <div className="space-y-4 my-2">
+              <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-2">
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-zinc-400">Company Name:</span>
+                  <span className="text-white font-bold">{tokenSuccessData.name}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs font-mono">
+                  <span className="text-zinc-400">Company Page:</span>
+                  <Link
+                    href={`/startup/${tokenSuccessData.slug}`}
+                    target="_blank"
+                    className="text-cyan-400 underline font-semibold flex items-center gap-1"
+                  >
+                    /startup/{tokenSuccessData.slug} <ExternalLink className="h-3 w-3" />
+                  </Link>
+                </div>
+              </div>
+
+              {/* Big Token Display Box */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border border-amber-500/35 text-center space-y-2 shadow-inner">
+                <span className="text-[11px] font-mono text-amber-300 uppercase tracking-wider font-semibold block">
+                  Official Company Login Token Number
+                </span>
+                <span className="text-4xl font-mono font-black text-amber-300 tracking-widest block drop-shadow-md">
+                  #{tokenSuccessData.token}
+                </span>
+                <p className="text-[11px] font-mono text-zinc-400">
+                  🔒 Security Rule: Only 1 active login is permitted on this token number.
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(tokenSuccessData.token);
+                    setTokenCopiedSuccess(true);
+                    setTimeout(() => setTokenCopiedSuccess(false), 2000);
+                  }}
+                  className="flex-1 font-mono text-xs font-bold bg-amber-500 text-black hover:bg-amber-400 gap-1.5 shadow-lg shadow-amber-500/20"
+                >
+                  {tokenCopiedSuccess ? (
+                    <>
+                      <Check className="h-4 w-4" /> Copied to Clipboard!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4" /> Copy Token Number
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setTokenSuccessModalOpen(false)}
+                  className="font-mono text-xs border-white/20 text-zinc-300 hover:text-white"
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -8,15 +8,22 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser(req);
-    const body = await req.json();
-
-    const targetUserId = user?.id || body.userId;
-    if (!targetUserId) {
+    if (!user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized: Please log in to trade." },
         { status: 401 }
       );
     }
+
+    if (user.role === "STARTUP") {
+      return NextResponse.json(
+        { success: false, message: "Company founder accounts cannot trade stocks on the exchange." },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const targetUserId = user.id; // Anti-IDOR: strictly enforce authenticated user ID
 
     const { startupId, side, type, quantity, price } = body;
 
@@ -41,10 +48,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const numQty = Number(quantity);
+    const numQty = Math.floor(Number(quantity));
     if (!numQty || isNaN(numQty) || numQty <= 0) {
       return NextResponse.json(
-        { success: false, message: "Order quantity must be a positive number." },
+        { success: false, message: "Order quantity must be a positive whole number." },
         { status: 400 }
       );
     }
@@ -52,7 +59,7 @@ export async function POST(req: NextRequest) {
     const numPrice = price !== undefined && price !== null ? Number(price) : undefined;
     if (type === "LIMIT" && (!numPrice || isNaN(numPrice) || numPrice <= 0)) {
       return NextResponse.json(
-        { success: false, message: "Limit orders require a valid price." },
+        { success: false, message: "Limit orders require a valid positive price." },
         { status: 400 }
       );
     }
@@ -68,20 +75,23 @@ export async function POST(req: NextRequest) {
 
     invalidateCache();
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: true,
+      message: result.message,
+      orderId: result.orderId,
+      status: result.status,
+      filledQuantity: result.filledQuantity,
+      remainingQuantity: result.remainingQuantity,
+      trades: result.trades,
+    });
   } catch (error: any) {
-    console.error("Trade Order API Error:", error);
-    const message = error.message || "Failed to execute order.";
-    const isValidationErr =
-      message.includes("Insufficient") ||
-      message.includes("suspended") ||
-      message.includes("not open") ||
-      message.includes("CLOSED") ||
-      message.includes("positive");
-
+    console.error("Order API error:", error);
     return NextResponse.json(
-      { success: false, message },
-      { status: isValidationErr ? 400 : 500 }
+      {
+        success: false,
+        message: error.message || "An error occurred while executing your order.",
+      },
+      { status: 400 }
     );
   }
 }
