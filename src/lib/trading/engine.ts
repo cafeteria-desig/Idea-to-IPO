@@ -37,27 +37,53 @@ export interface PlaceOrderResult {
 }
 
 /**
- * Responsive & Balanced Market Maker Tier Configuration:
- * Granular price progression calibrated for audience pitch trading.
- * Buying moves price up noticeably (+0.8%, +1.6%, +2.5%, +3.5%...),
- * Selling moves price down symmetrically (-0.8%, -1.6%, -2.5%, -3.5%...).
+ * Responsive & Calibrated Market Maker Tier Configurations:
+ *
+ * MM_ASK_TIERS (Buy Side for customers / Stock Increment):
+ * Calibrated so buying 250 shares increases price smoothly from ~₹193 to ~₹201 (+4.15% gain).
+ *
+ * MM_BID_TIERS (Sell Side for customers / Stock Decrement):
+ * Calibrated gentler stock decrement curve so selling doesn't crash prices prematurely.
+ * Specifically:
+ * - Selling 100 shares from ₹201 drops the price gently to ₹197 (-1.99% / ₹4 drop, instead of crashing down to ₹195).
+ * - Sells up to 250 shares drop ~3.8% (to ~₹193.36), keeping sell pressure balanced and proportional to buying.
  */
-export const BALANCED_MM_TIERS = [
-  { pct: 0.008, qty: 25 },    // ±0.8% (25 shares)
-  { pct: 0.016, qty: 50 },    // ±1.6% (50 shares)
-  { pct: 0.025, qty: 75 },    // ±2.5% (75 shares)
-  { pct: 0.035, qty: 100 },   // ±3.5% (100 shares)
-  { pct: 0.048, qty: 150 },   // ±4.8% (150 shares)
-  { pct: 0.062, qty: 200 },   // ±6.2% (200 shares)
-  { pct: 0.078, qty: 300 },   // ±7.8% (300 shares)
-  { pct: 0.095, qty: 500 },   // ±9.5% (500 shares)
-  { pct: 0.115, qty: 750 },   // ±11.5% (750 shares)
-  { pct: 0.140, qty: 1000 },  // ±14.0% (1,000 shares)
-  { pct: 0.170, qty: 2000 },  // ±17.0% (2,000 shares)
-  { pct: 0.210, qty: 5000 },  // ±21.0% (5,000 shares)
-  { pct: 0.260, qty: 10000 }, // ±26.0% (10,000 shares)
-  { pct: 0.320, qty: 25000 }, // ±32.0% (25,000 shares)
+export const MM_ASK_TIERS = [
+  { pct: 0.008, qty: 25 },    // +0.8% (25 shares, cum 25)
+  { pct: 0.016, qty: 50 },    // +1.6% (50 shares, cum 75)
+  { pct: 0.025, qty: 75 },    // +2.5% (75 shares, cum 150)
+  { pct: 0.04145, qty: 100 }, // +4.145% (100 shares, cum 250) -> 193 * 1.04145 = ₹201.00
+  { pct: 0.052, qty: 150 },   // +5.2% (150 shares, cum 400)
+  { pct: 0.065, qty: 200 },   // +6.5% (200 shares, cum 600)
+  { pct: 0.080, qty: 300 },   // +8.0% (300 shares, cum 900)
+  { pct: 0.098, qty: 500 },   // +9.8% (500 shares, cum 1400)
+  { pct: 0.118, qty: 750 },   // +11.8% (750 shares, cum 2150)
+  { pct: 0.142, qty: 1000 },  // +14.2% (1,000 shares, cum 3150)
+  { pct: 0.175, qty: 2000 },  // +17.5% (2,000 shares, cum 5150)
+  { pct: 0.215, qty: 5000 },  // +21.5% (5,000 shares, cum 10150)
+  { pct: 0.265, qty: 10000 }, // +26.5% (10,000 shares, cum 20150)
+  { pct: 0.325, qty: 25000 }, // +32.5% (25,000 shares, cum 45150)
 ];
+
+export const MM_BID_TIERS = [
+  { pct: 0.006, qty: 25 },    // -0.6% (25 shares, cum 25)
+  { pct: 0.012, qty: 40 },    // -1.2% (40 shares, cum 65)
+  { pct: 0.0199, qty: 50 },   // -1.99% (50 shares, cum 115) -> 100 shares fills in this tier @ ₹197.00 from ₹201.00!
+  { pct: 0.028, qty: 65 },    // -2.8% (65 shares, cum 180)
+  { pct: 0.038, qty: 85 },    // -3.8% (85 shares, cum 265) -> 250 shares drops ~3.8% (~₹7.64, balanced with buy)
+  { pct: 0.050, qty: 150 },   // -5.0% (150 shares, cum 415)
+  { pct: 0.065, qty: 250 },   // -6.5% (250 shares, cum 665)
+  { pct: 0.082, qty: 400 },   // -8.2% (400 shares, cum 1065)
+  { pct: 0.100, qty: 600 },   // -10.0% (600 shares, cum 1665)
+  { pct: 0.125, qty: 1000 },  // -12.5% (1,000 shares, cum 2665)
+  { pct: 0.155, qty: 2000 },  // -15.5% (2,000 shares, cum 4665)
+  { pct: 0.195, qty: 5000 },  // -19.5% (5,000 shares, cum 9665)
+  { pct: 0.245, qty: 10000 }, // -24.5% (10,000 shares, cum 19665)
+  { pct: 0.300, qty: 25000 }, // -30.0% (25,000 shares, cum 44665)
+];
+
+// Backwards compatibility alias
+export const BALANCED_MM_TIERS = MM_ASK_TIERS;
 
 /**
  * Executes a Buy or Sell Order atomically using an ultra-optimized matching engine.
@@ -231,6 +257,7 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
     let totalExecutedAmount = 0;
     let totalExecutedQuantity = 0;
     let buyerAvailableCash = user.currentBalance;
+    let finalCalculatedLtp = startup.currentPrice;
 
     const tradesToCreate: any[] = [];
     const executedTrades: TradeResult[] = [];
@@ -434,6 +461,7 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
       } else {
         newLtp = Number(Math.max(1.00, Math.min(startup.currentPrice - 0.05, newLtp)).toFixed(2));
       }
+      finalCalculatedLtp = newLtp;
 
       const newHigh = Math.max(startup.dayHigh || newLtp, newLtp);
       const newLow = startup.dayLow && startup.dayLow > 0 ? Math.min(startup.dayLow, newLtp) : newLtp;
@@ -546,7 +574,7 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
       totalExecutedAmount,
       executedTrades,
       currentBalance: freshUser.currentBalance,
-      newLtp: executedTrades.length > 0 ? executedTrades[executedTrades.length - 1].price : startup.currentPrice,
+      newLtp: finalCalculatedLtp,
     };
   }, {
     maxWait: 8000,
@@ -821,10 +849,9 @@ export async function rebalanceMarketMakerLiquidity(
   const seenAskPrices = new Set<number>();
   const seenBidPrices = new Set<number>();
 
-  for (const tier of BALANCED_MM_TIERS) {
+  // 1. Generate Asks (Sell orders on the book, which buyers buy from / Stock Increment)
+  for (const tier of MM_ASK_TIERS) {
     const tick = basePrice < 1 ? 0.01 : 0.05;
-
-    // Symmetrical Ask (Buy Side for customers)
     const askPrice = Number(Math.max(basePrice + tick, basePrice * (1 + tier.pct)).toFixed(2));
     if (!seenAskPrices.has(askPrice)) {
       seenAskPrices.add(askPrice);
@@ -842,8 +869,11 @@ export async function rebalanceMarketMakerLiquidity(
         reservedAmount: 0,
       });
     }
+  }
 
-    // Symmetrical Bid (Sell Side for customers)
+  // 2. Generate Bids (Buy orders on the book, which sellers sell into / Stock Decrement)
+  for (const tier of MM_BID_TIERS) {
+    const tick = basePrice < 1 ? 0.01 : 0.05;
     const rawBid = Math.min(basePrice - tick, basePrice * (1 - tier.pct));
     const bidPrice = Number(Math.max(0.01, rawBid).toFixed(2));
     if (!seenBidPrices.has(bidPrice)) {
