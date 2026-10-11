@@ -56,13 +56,9 @@ export const MM_ASK_TIERS = [
   { pct: 0.052, qty: 150 },   // +5.2% (150 shares, cum 400)
   { pct: 0.065, qty: 200 },   // +6.5% (200 shares, cum 600)
   { pct: 0.080, qty: 300 },   // +8.0% (300 shares, cum 900)
-  { pct: 0.098, qty: 500 },   // +9.8% (500 shares, cum 1400)
-  { pct: 0.118, qty: 750 },   // +11.8% (750 shares, cum 2150)
-  { pct: 0.142, qty: 1000 },  // +14.2% (1,000 shares, cum 3150)
-  { pct: 0.175, qty: 2000 },  // +17.5% (2,000 shares, cum 5150)
-  { pct: 0.215, qty: 5000 },  // +21.5% (5,000 shares, cum 10150)
-  { pct: 0.265, qty: 10000 }, // +26.5% (10,000 shares, cum 20150)
-  { pct: 0.325, qty: 25000 }, // +32.5% (25,000 shares, cum 45150)
+  { pct: 0.100, qty: 500 },   // +10.0% (500 shares, cum 1400)
+  { pct: 0.150, qty: 1000 },  // +15.0% (1,000 shares, cum 2400)
+  { pct: 0.250, qty: 5000 },  // +25.0% (5,000 shares, cum 7400)
 ];
 
 export const MM_BID_TIERS = [
@@ -72,14 +68,10 @@ export const MM_BID_TIERS = [
   { pct: 0.028, qty: 65 },    // -2.8% (65 shares, cum 180)
   { pct: 0.038, qty: 85 },    // -3.8% (85 shares, cum 265) -> 250 shares drops ~3.8% (~₹7.64, balanced with buy)
   { pct: 0.050, qty: 150 },   // -5.0% (150 shares, cum 415)
-  { pct: 0.065, qty: 250 },   // -6.5% (250 shares, cum 665)
-  { pct: 0.082, qty: 400 },   // -8.2% (400 shares, cum 1065)
-  { pct: 0.100, qty: 600 },   // -10.0% (600 shares, cum 1665)
-  { pct: 0.125, qty: 1000 },  // -12.5% (1,000 shares, cum 2665)
-  { pct: 0.155, qty: 2000 },  // -15.5% (2,000 shares, cum 4665)
-  { pct: 0.195, qty: 5000 },  // -19.5% (5,000 shares, cum 9665)
-  { pct: 0.245, qty: 10000 }, // -24.5% (10,000 shares, cum 19665)
-  { pct: 0.300, qty: 25000 }, // -30.0% (25,000 shares, cum 44665)
+  { pct: 0.070, qty: 300 },   // -7.0% (300 shares, cum 715)
+  { pct: 0.100, qty: 600 },   // -10.0% (600 shares, cum 1315)
+  { pct: 0.150, qty: 1000 },  // -15.0% (1,000 shares, cum 2315)
+  { pct: 0.250, qty: 5000 },  // -25.0% (5,000 shares, cum 7315)
 ];
 
 // Backwards compatibility alias
@@ -98,11 +90,27 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    // 1. Parallel Lock & Validate
-    const [marketState, user, startup] = await Promise.all([
+    // 1. Parallel Lock & Validate (Pre-fetch holdings & open sell orders concurrently if SELL)
+    const [marketState, user, startup, userHolding, openSellOrders] = await Promise.all([
       tx.marketState.findUnique({ where: { id: "global" } }),
       tx.user.findUnique({ where: { id: userId } }),
       tx.startup.findUnique({ where: { id: startupId } }),
+      side === "SELL"
+        ? tx.holding.findUnique({
+            where: { userId_startupId: { userId, startupId } },
+          })
+        : Promise.resolve(null),
+      side === "SELL"
+        ? tx.order.findMany({
+            where: {
+              userId,
+              startupId,
+              side: "SELL",
+              status: { in: ["OPEN", "PARTIALLY_FILLED"] },
+            },
+            select: { remainingQuantity: true },
+          })
+        : Promise.resolve([]),
     ]);
 
     if (!marketState || !marketState.isMarketActive) {
@@ -161,23 +169,8 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
       }
     } else {
       // SELL: Validate user holds sufficient available shares
-      const [userHolding, openSellOrders] = await Promise.all([
-        tx.holding.findUnique({
-          where: { userId_startupId: { userId: user.id, startupId: startup.id } },
-        }),
-        tx.order.findMany({
-          where: {
-            userId: user.id,
-            startupId: startup.id,
-            side: "SELL",
-            status: { in: ["OPEN", "PARTIALLY_FILLED"] },
-          },
-          select: { remainingQuantity: true },
-        }),
-      ]);
-
       const currentOwned = userHolding?.quantity || 0;
-      const lockedSellShares = openSellOrders.reduce((sum, ord) => sum + ord.remainingQuantity, 0);
+      const lockedSellShares = (openSellOrders || []).reduce((sum, ord) => sum + ord.remainingQuantity, 0);
 
       const availableToSell = currentOwned - lockedSellShares;
       if (availableToSell < quantity) {
@@ -187,7 +180,7 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
       }
     }
 
-    // 4. Create the Incoming Order & 5. Find Opposite Orders for Matching concurrently
+    // 4. Create Incoming Order & 5. Find Opposite Orders concurrently
     const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
     const oppositeSide = side === "BUY" ? "SELL" : "BUY";
 
@@ -223,7 +216,7 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
           { price: side === "BUY" ? "asc" : "desc" },
           { createdAt: "asc" },
         ],
-        take: 25,
+        take: 10,
       }),
     ]);
 
@@ -248,7 +241,7 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
           { price: side === "BUY" ? "asc" : "desc" },
           { createdAt: "asc" },
         ],
-        take: 25,
+        take: 10,
       });
     }
 
@@ -264,16 +257,14 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
     const makerOrderUpdates: { id: string; filled: number; remaining: number; status: string }[] = [];
 
     // Track net changes per participant
-    // For sellers: map of sellerId -> { qtySold, cashReceived, trades: { qty, price, amount }[] }
     const sellerDeltas = new Map<string, { qtySold: number; cashReceived: number }>();
-    // For buyers: map of buyerId -> { qtyBought, cashPaid }
     const buyerDeltas = new Map<string, { qtyBought: number; cashPaid: number }>();
 
     for (const makerOrder of matchingOrders) {
       if (remainingToFill <= 0) break;
 
       const tradeQty = Math.min(remainingToFill, makerOrder.remainingQuantity);
-      const tradePrice = makerOrder.price; // Executes at maker's quoted price
+      const tradePrice = makerOrder.price;
       const tradeAmount = Number((tradeQty * tradePrice).toFixed(2));
 
       // Buyer affordability check
@@ -281,7 +272,6 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
         if (type === "MARKET" && buyerAvailableCash < tradeAmount) {
           const maxAffordable = Math.floor(buyerAvailableCash / tradePrice);
           if (maxAffordable <= 0) break;
-          // Trade only what can be afforded
           if (maxAffordable < tradeQty) {
             break;
           }
@@ -324,13 +314,12 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
         status: newRemaining === 0 ? "FILLED" : "PARTIALLY_FILLED",
       });
 
-      // Accumulate seller deltas
+      // Accumulate deltas
       const sDelta = sellerDeltas.get(sellerId) || { qtySold: 0, cashReceived: 0 };
       sDelta.qtySold += tradeQty;
       sDelta.cashReceived += tradeAmount;
       sellerDeltas.set(sellerId, sDelta);
 
-      // Accumulate buyer deltas
       const bDelta = buyerDeltas.get(buyerId) || { qtyBought: 0, cashPaid: 0 };
       bDelta.qtyBought += tradeQty;
       bDelta.cashPaid += tradeAmount;
@@ -347,7 +336,6 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
         new Set([...Array.from(buyerDeltas.keys()), ...Array.from(sellerDeltas.keys())])
       );
 
-      // Pre-fetch all affected holdings, create trades, and update maker orders concurrently in 1 round trip
       const [existingHoldings] = await Promise.all([
         tx.holding.findMany({
           where: {
@@ -450,12 +438,10 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
         );
       }
 
-      // 8. Update Last Traded Price (LTP) & Stock Metrics
-      // Dynamic price discovery: LTP is computed with directional movement guarantees
+      // 8. Dynamic price discovery LTP update
       const lastTrade = executedTrades[executedTrades.length - 1];
       let newLtp = lastTrade.price;
 
-      // Ensure every BUY moves price UP, and every SELL moves price DOWN (minimum 0.05 tick, or higher)
       if (side === "BUY") {
         newLtp = Number(Math.max(startup.currentPrice + 0.05, newLtp).toFixed(2));
       } else {
@@ -486,51 +472,6 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
         })
       );
 
-      // Record single PriceHistory entry
-      parallelWrites.push(
-        tx.priceHistory.create({
-          data: {
-            startupId: startup.id,
-            price: newLtp,
-            volume: totalExecutedQuantity,
-          },
-        })
-      );
-
-      // Activity Feed & Legacy Investment Record
-      const userDisplayId = getUserDisplayIdentifier(user);
-      const actionVerb = side === "BUY" ? "bought" : "sold";
-
-      parallelWrites.push(
-        tx.activityFeed.create({
-          data: {
-            type: "TRADE",
-            message: `${userDisplayId} ${actionVerb} ${totalExecutedQuantity} shares of ${startup.name} at ${formatSharePrice(newLtp)}`,
-            startupName: startup.name,
-            investorName: userDisplayId,
-            amount: totalExecutedAmount,
-            isPublic: true,
-          },
-        })
-      );
-
-      if (side === "BUY") {
-        parallelWrites.push(
-          tx.investment.create({
-            data: {
-              id: `INV-${Math.floor(100000 + Math.random() * 900000)}`,
-              investorId: user.id,
-              investorName: userDisplayId,
-              investorType: user.role === "FII" ? "FII" : "RETAIL",
-              startupId: startup.id,
-              amount: totalExecutedAmount,
-              status: "VALID",
-              note: `Market Trade (${totalExecutedQuantity} shares @ ${formatSharePrice(newLtp)})`,
-            },
-          })
-        );
-      }
-
       await Promise.all(parallelWrites);
     }
 
@@ -551,17 +492,18 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
       finalStatus = finalFilled > 0 ? "PARTIALLY_FILLED" : "REJECTED";
     }
 
-    const [, freshUser] = await Promise.all([
-      tx.order.update({
-        where: { id: newOrder.id },
-        data: {
-          filledQuantity: finalFilled,
-          remainingQuantity: type === "MARKET" ? 0 : finalRemaining,
-          status: finalStatus,
-        },
-      }),
-      tx.user.findUniqueOrThrow({ where: { id: user.id } }),
-    ]);
+    await tx.order.update({
+      where: { id: newOrder.id },
+      data: {
+        filledQuantity: finalFilled,
+        remainingQuantity: type === "MARKET" ? 0 : finalRemaining,
+        status: finalStatus,
+      },
+    });
+
+    const calculatedBalance = side === "BUY"
+      ? Number((user.currentBalance - totalExecutedAmount).toFixed(2))
+      : Number((user.currentBalance + totalExecutedAmount).toFixed(2));
 
     const avgPrice = totalExecutedQuantity > 0 ? totalExecutedAmount / totalExecutedQuantity : targetPrice;
 
@@ -573,20 +515,61 @@ export async function executeOrder(input: PlaceOrderInput): Promise<PlaceOrderRe
       avgPrice,
       totalExecutedAmount,
       executedTrades,
-      currentBalance: freshUser.currentBalance,
+      currentBalance: calculatedBalance,
       newLtp: finalCalculatedLtp,
+      user,
+      startupName: startup.name,
     };
   }, {
-    maxWait: 8000,
-    timeout: 15000,
+    maxWait: 20000,
+    timeout: 60000,
   });
 
-  // 10. Post-Transaction Background Actions (Non-blocking!)
-  // Invalidate cache immediately so all client endpoints read fresh data instantly
+  // 10. Post-Transaction Background Actions (Non-blocking: PriceHistory, ActivityFeed, MM rebalance)
   invalidateCache();
 
-  // Asynchronously rebalance market maker orders in the background so next trades execute immediately
   if (result.executedTrades.length > 0) {
+    const userDisplayId = getUserDisplayIdentifier(result.user);
+    const actionVerb = side === "BUY" ? "bought" : "sold";
+
+    // Non-blocking telemetry & logging outside the transactional critical path
+    Promise.all([
+      prisma.priceHistory.create({
+        data: {
+          startupId,
+          price: result.newLtp,
+          volume: result.finalFilled,
+        },
+      }),
+      prisma.activityFeed.create({
+        data: {
+          type: "TRADE",
+          message: `${userDisplayId} ${actionVerb} ${result.finalFilled} shares of ${result.startupName} at ${formatSharePrice(result.newLtp)}`,
+          startupName: result.startupName,
+          investorName: userDisplayId,
+          amount: result.totalExecutedAmount,
+          isPublic: true,
+        },
+      }),
+      side === "BUY"
+        ? prisma.investment.create({
+            data: {
+              id: `INV-${Math.floor(100000 + Math.random() * 900000)}`,
+              investorId: userId,
+              investorName: userDisplayId,
+              investorType: result.user.role === "FII" ? "FII" : "RETAIL",
+              startupId,
+              amount: result.totalExecutedAmount,
+              status: "VALID",
+              note: `Market Trade (${result.finalFilled} shares @ ${formatSharePrice(result.newLtp)})`,
+            },
+          })
+        : Promise.resolve(null),
+    ]).catch((err) => {
+      console.warn("Background log telemetry notice:", err);
+    });
+
+    // Asynchronously refresh market maker liquidity ladder
     setTimeout(() => {
       rebalanceMarketMakerLiquidity(startupId, result.newLtp).catch((err) => {
         console.warn("Background MM rebalance notice:", err);
@@ -665,8 +648,8 @@ export async function cancelOrder(orderId: string, userId: string): Promise<{ su
       message: `Order ${order.id} cancelled successfully.`,
     };
   }, {
-    maxWait: 5000,
-    timeout: 10000,
+    maxWait: 15000,
+    timeout: 30000,
   });
 }
 
