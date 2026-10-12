@@ -100,8 +100,8 @@ async function main() {
     },
   });
 
-  // 5. Restore all Audience Members and reset their fundings to full ₹5,00,000
-  console.log("[5/5] Restoring all 153 Audience Members with full ₹5,00,000 funding...");
+  // 5. Restore all Audience Members and reset their fundings to full ₹1,00,000
+  console.log("[5/5] Restoring all 153 Audience Members with full ₹1,00,000 funding...");
   const audienceList = audienceTokens as Array<{
     sNo: number;
     name: string;
@@ -126,8 +126,8 @@ async function main() {
         token: token,
         role: "RETAIL",
         status: "ACTIVE",
-        startingCapital: 500000,
-        currentBalance: 500000,
+        startingCapital: 100000,
+        currentBalance: 100000,
         totalInvested: 0,
         isOnline: false,
         activeSessionId: null,
@@ -142,8 +142,8 @@ async function main() {
         token: token,
         role: "RETAIL",
         status: "ACTIVE",
-        startingCapital: 500000,
-        currentBalance: 500000,
+        startingCapital: 100000,
+        currentBalance: 100000,
         totalInvested: 0,
         isOnline: false,
       },
@@ -179,7 +179,7 @@ async function main() {
   console.log("==================================================================");
   console.log("🎉 SITE CLEANUP & AUDIENCE FUNDING RESTORATION COMPLETE!");
   console.log(` - Remaining Startups / Companies: ${totalStartupsAfter} (All cleared)`);
-  console.log(` - Total Audience Members: ${totalAudience} (All restored to ₹5,00,000)`);
+  console.log(` - Total Audience Members: ${totalAudience} (All restored to ₹1,00,000)`);
   console.log(` - Admin Accounts: ${totalAdmins}`);
   console.log(` - Total Users: ${totalUsers}`);
   console.log("==================================================================");

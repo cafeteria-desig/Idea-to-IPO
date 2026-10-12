@@ -58,6 +58,7 @@ import {
   Key,
   Copy,
   Check,
+  Edit3,
 } from "lucide-react";
 import type { StartupItem, SafeUser, InvestmentItem, AuditLogItem, FinalAwardItem, IPOStatus } from "@/types";
 import { getUserLoginToken, generateRandomToken } from "@/lib/tokens";
@@ -109,7 +110,7 @@ export default function AdminControlRoomPage() {
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserToken, setNewUserToken] = useState("");
   const [newUserRole, setNewUserRole] = useState<"RETAIL" | "FII" | "STARTUP" | "ADMIN">("RETAIL");
-  const [newUserCapital, setNewUserCapital] = useState<number>(500000);
+  const [newUserCapital, setNewUserCapital] = useState<number>(100000);
   const [newUserStartupId, setNewUserStartupId] = useState("");
   const [newUserPhone, setNewUserPhone] = useState("");
   const [newUserError, setNewUserError] = useState("");
@@ -140,6 +141,30 @@ export default function AdminControlRoomPage() {
   const [tokenCopiedSuccess, setTokenCopiedSuccess] = useState(false);
   const [isRegisteringTeam, setIsRegisteringTeam] = useState(false);
   const [registerTeamError, setRegisterTeamError] = useState("");
+
+  // Edit Team Modal State
+  const [editTeamModalOpen, setEditTeamModalOpen] = useState(false);
+  const [editingStartup, setEditingStartup] = useState<StartupItem | null>(null);
+  const [editTeamName, setEditTeamName] = useState("");
+  const [editTeamIdea, setEditTeamIdea] = useState("");
+  const [editTeamTagline, setEditTeamTagline] = useState("");
+  const [editTeamIndustry, setEditTeamIndustry] = useState("Fintech & Web3");
+  const [editTeamAsk, setEditTeamAsk] = useState<number>(10000000);
+  const [editTeamSharePrice, setEditTeamSharePrice] = useState<number>(100);
+  const [editTeamTotalShares, setEditTeamTotalShares] = useState<number>(1000000);
+  const [editTeamValuation, setEditTeamValuation] = useState<number>(100000000);
+  const [editTeamEquity, setEditTeamEquity] = useState<number>(10);
+  const [editTeamPitchOrder, setEditTeamPitchOrder] = useState<number>(1);
+  const [editTeamStatus, setEditTeamStatus] = useState<IPOStatus>("IPO_OPEN");
+  const [editTeamFounderName, setEditTeamFounderName] = useState("");
+  const [editTeamProblem, setEditTeamProblem] = useState("");
+  const [editTeamSolution, setEditTeamSolution] = useState("");
+  const [editTeamBusinessModel, setEditTeamBusinessModel] = useState("");
+  const [editTeamTargetMarket, setEditTeamTargetMarket] = useState("");
+  const [editTeamToken, setEditTeamToken] = useState("");
+  const [editTeamPitchDeckUrl, setEditTeamPitchDeckUrl] = useState("");
+  const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
+  const [editTeamError, setEditTeamError] = useState("");
 
   // Delete Team State
   const [deleteStartupConfirmId, setDeleteStartupConfirmId] = useState<string | null>(null);
@@ -421,6 +446,117 @@ export default function AdminControlRoomPage() {
     }
   };
 
+  // 1b-ii. Open Edit Team Modal
+  const handleOpenEditTeamModal = (startup: StartupItem) => {
+    let founder = "";
+    try {
+      const parsed = JSON.parse(startup.teamMembers || "[]");
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        founder = parsed[0].name || "";
+      }
+    } catch (e) {}
+
+    setEditingStartup(startup);
+    setEditTeamName(startup.name || "");
+    setEditTeamPitchOrder(startup.pitchOrder || 1);
+    setEditTeamToken(startup.token || "");
+    setEditTeamTagline(startup.tagLine || "");
+    setEditTeamIndustry(startup.industry || "Fintech & Web3");
+    setEditTeamIdea(startup.pitchSummary || startup.problem || "");
+    setEditTeamProblem(startup.problem || "");
+    setEditTeamSolution(startup.solution || "");
+    setEditTeamBusinessModel(startup.businessModel || "");
+    setEditTeamTargetMarket(startup.targetMarket || "");
+    setEditTeamTotalShares(startup.totalShares || 1000000);
+    setEditTeamSharePrice(startup.currentPrice || 100);
+    setEditTeamValuation(startup.initialValuation || (startup.totalShares || 1000000) * (startup.currentPrice || 100));
+    setEditTeamAsk(startup.fundingAsk || 10000000);
+    setEditTeamEquity(startup.equityOffered ?? 10);
+    setEditTeamFounderName(founder);
+    setEditTeamStatus(startup.ipoStatus || "COMING_UP");
+    setEditTeamPitchDeckUrl(startup.pitchDeckUrl || "");
+    setEditTeamError("");
+    setEditTeamModalOpen(true);
+  };
+
+  // 1b-iii. Submit Update Team
+  const handleUpdateTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStartup) return;
+    setEditTeamError("");
+
+    if (!editTeamName.trim()) {
+      setEditTeamError("Team / Startup name is required.");
+      return;
+    }
+    if (!editTeamIdea.trim()) {
+      setEditTeamError("Startup idea / pitch summary is required.");
+      return;
+    }
+
+    const sharesToSubmit = Number(editTeamTotalShares) > 0 ? Number(editTeamTotalShares) : 1000000;
+    const priceToSubmit = Number(editTeamSharePrice) > 0 ? Number(editTeamSharePrice) : 100;
+    const valuationToSubmit = Number(editTeamValuation) > 0 ? Number(editTeamValuation) : sharesToSubmit * priceToSubmit;
+    const askToSubmit = Number(editTeamAsk) >= 0 ? Number(editTeamAsk) : 0;
+    const equityToSubmit = Number(editTeamEquity) >= 0 ? Number(editTeamEquity) : 10;
+    const pitchOrderToSubmit = Number(editTeamPitchOrder) > 0 ? Number(editTeamPitchOrder) : 1;
+
+    setIsUpdatingTeam(true);
+
+    try {
+      const res = await fetch(`/api/admin/startups/${editingStartup.id}?adminId=${user?.id || "user-admin"}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": user?.id || "user-admin",
+        },
+        body: JSON.stringify({
+          adminId: user?.id || "user-admin",
+          name: editTeamName.trim(),
+          pitchOrder: pitchOrderToSubmit,
+          token: editTeamToken.trim() || undefined,
+          tagLine: editTeamTagline.trim() || editTeamIdea.trim().slice(0, 80),
+          industry: editTeamIndustry,
+          idea: editTeamIdea.trim(),
+          pitchSummary: editTeamIdea.trim(),
+          problem: editTeamProblem.trim() || editTeamIdea.trim(),
+          solution: editTeamSolution.trim() || editTeamIdea.trim(),
+          businessModel: editTeamBusinessModel.trim() || undefined,
+          targetMarket: editTeamTargetMarket.trim() || undefined,
+          totalShares: sharesToSubmit,
+          shareValue: priceToSubmit,
+          currentPrice: priceToSubmit,
+          valuation: valuationToSubmit,
+          fundingAsk: askToSubmit,
+          equityOffered: equityToSubmit,
+          founderName: editTeamFounderName.trim() || undefined,
+          ipoStatus: editTeamStatus,
+          pitchDeckUrl: editTeamPitchDeckUrl.trim() || undefined,
+        }),
+      });
+
+      let data: any = {};
+      try {
+        const text = await res.text();
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { message: `Server status: HTTP ${res.status}` };
+      }
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || `Failed to update team (HTTP ${res.status}).`);
+      }
+
+      flashMessage(`✅ Team "${editTeamName}" (Pitch #${pitchOrderToSubmit}) updated successfully!`);
+      setEditTeamModalOpen(false);
+      await refreshAllAdminData();
+    } catch (err: any) {
+      setEditTeamError(err.message || "An error occurred while updating the team.");
+    } finally {
+      setIsUpdatingTeam(false);
+    }
+  };
+
   // 1c. Delete Startup Team
   const handleDeleteStartup = async (startupId: string) => {
     setIsDeletingStartup(true);
@@ -530,7 +666,7 @@ export default function AdminControlRoomPage() {
     if (role === "FII") {
       setNewUserCapital(10000000); // 1 Cr default
     } else if (role === "RETAIL") {
-      setNewUserCapital(500000); // 5 L default
+      setNewUserCapital(100000); // 1 L default
     } else {
       setNewUserCapital(0);
     }
@@ -570,7 +706,7 @@ export default function AdminControlRoomPage() {
         setNewUserPassword("");
         setNewUserToken(generateRandomToken());
         setNewUserRole("RETAIL");
-        setNewUserCapital(500000);
+        setNewUserCapital(100000);
         setNewUserStartupId("");
         setNewUserPhone("");
         await refreshAllAdminData();
@@ -1214,6 +1350,16 @@ export default function AdminControlRoomPage() {
                             <h4 className="font-bold text-white text-base sm:text-lg">{s.name}</h4>
                             <span className="text-xs font-mono text-cyan-400 font-semibold">({s.industry})</span>
                             <StatusBadge status={s.ipoStatus} />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenEditTeamModal(s)}
+                              className="h-6 px-1.5 text-[11px] font-mono text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 gap-1 ml-1"
+                              title="Edit Team & Pitch Information"
+                            >
+                              <Edit3 className="h-3 w-3" /> Edit
+                            </Button>
                           </div>
                           <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-zinc-400">
                             <span>Ask: <strong className="text-white">{formatINR(s.fundingAsk)}</strong></span>
@@ -1525,17 +1671,31 @@ export default function AdminControlRoomPage() {
                             </select>
                           </div>
 
-                          {/* Delete button */}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setDeleteStartupConfirmId(s.id)}
-                            className="h-8 px-2.5 rounded-lg border-rose-500/30 text-rose-400 hover:bg-rose-500/10 font-mono text-xs gap-1"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            Delete
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            {/* Edit Team button */}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleOpenEditTeamModal(s)}
+                              className="h-8 px-2.5 rounded-lg border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 font-mono text-xs gap-1"
+                            >
+                              <Edit3 className="h-3 w-3" />
+                              Edit Team
+                            </Button>
+
+                            {/* Delete button */}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setDeleteStartupConfirmId(s.id)}
+                              className="h-8 px-2.5 rounded-lg border-rose-500/30 text-rose-400 hover:bg-rose-500/10 font-mono text-xs gap-1"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Delete
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -2745,7 +2905,7 @@ export default function AdminControlRoomPage() {
                   required
                 />
                 <p className="text-[10px] font-mono text-zinc-500">
-                  Default: ₹5,00,000 for Retail, ₹1,00,00,000 for Institutional FII.
+                  Default: ₹1,00,000 for Retail, ₹1,00,00,000 for Institutional FII.
                 </p>
               </div>
             )}
@@ -3144,6 +3304,359 @@ export default function AdminControlRoomPage() {
                 ) : (
                   <>
                     <CheckCircle2 className="h-3.5 w-3.5" /> Register & Launch Team
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* EDIT STARTUP TEAM & PITCH MODAL */}
+      <Dialog open={editTeamModalOpen} onOpenChange={setEditTeamModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-[#0a0f1d]/95 border-cyan-500/30 text-white backdrop-blur-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-cyan-400">
+              <Edit3 className="h-5 w-5" />
+              Edit Team Information & Pitch Order
+            </DialogTitle>
+            <DialogDescription className="text-zinc-400 font-mono text-xs">
+              Modify pitch number, startup identity, valuation parameters, and stage status. Changes take effect instantly across all audience devices and live boards.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editTeamError && (
+            <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs font-mono text-rose-300 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+              <span>{editTeamError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleUpdateTeam} className="space-y-4 my-2">
+            {/* Row 1: Name and Pitch Order */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2 space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
+                  Team / Startup Name <span className="text-rose-400">*</span>
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. EcoVolt Motors, FinPay AI"
+                  value={editTeamName}
+                  onChange={(e) => setEditTeamName(e.target.value)}
+                  className="bg-black/50 border-white/15 text-xs text-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-cyan-300 flex items-center gap-1">
+                  Pitch Number <span className="text-rose-400">*</span>
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={editTeamPitchOrder}
+                  onChange={(e) => setEditTeamPitchOrder(Number(e.target.value))}
+                  className="bg-black/50 border-cyan-500/40 text-xs text-cyan-200 font-mono font-bold"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Dedicated Company Access Token Field */}
+            <div className="space-y-1.5 p-3 rounded-2xl bg-amber-500/[0.05] border border-amber-500/25">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                  <Key className="h-3.5 w-3.5" />
+                  Company Login Token
+                  <span className="text-zinc-400 font-normal text-[11px]">(6-digit access code)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setEditTeamToken(String(Math.floor(100000 + Math.random() * 900000)))}
+                  className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 font-bold underline"
+                >
+                  Generate New Token
+                </button>
+              </div>
+              <Input
+                type="text"
+                maxLength={6}
+                placeholder="6-digit token (e.g. 849201)"
+                value={editTeamToken}
+                onChange={(e) => setEditTeamToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="bg-black/60 border-amber-500/30 text-xs text-amber-200 font-mono tracking-widest font-bold"
+              />
+              <span className="text-[10px] font-mono text-zinc-400 block">
+                Founders log in using this passkey token to review company bids and metrics.
+              </span>
+            </div>
+
+            {/* Row 2: Tagline and Industry */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-300">
+                  One-Liner Tagline <span className="text-rose-400">*</span>
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Next-Gen EV Battery Fast-Swapping Grid"
+                  value={editTeamTagline}
+                  onChange={(e) => setEditTeamTagline(e.target.value)}
+                  className="bg-black/50 border-white/15 text-xs text-white"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-300">
+                  Industry / Sector <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  value={editTeamIndustry}
+                  onChange={(e) => setEditTeamIndustry(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-white/15 bg-black/50 px-3 py-1 text-xs font-mono text-white shadow-sm focus-visible:outline-none"
+                >
+                  <option value="Fintech & Web3">Fintech & Web3</option>
+                  <option value="CleanTech & EV Mobility">CleanTech & EV Mobility</option>
+                  <option value="AI & DeepTech">AI & DeepTech</option>
+                  <option value="HealthTech & Diagnostics">HealthTech & Diagnostics</option>
+                  <option value="EdTech & Learning">EdTech & Learning</option>
+                  <option value="AgriTech & Robotics">AgriTech & Robotics</option>
+                  <option value="Consumer & D2C">Consumer & D2C</option>
+                  <option value="SaaS & Enterprise">SaaS & Enterprise</option>
+                  <option value="Logistics & Supply Chain">Logistics & Supply Chain</option>
+                  <option value="Aerospace & Defense">Aerospace & Defense</option>
+                  <option value="General Innovation">General Innovation</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Row 3: Idea / Pitch summary (Required) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
+                  Startup Idea & Core Innovation <span className="text-rose-400">*</span>
+                </label>
+                <span className="text-[10px] font-mono text-zinc-400">
+                  Visible to investors and on terminal briefing
+                </span>
+              </div>
+              <textarea
+                rows={3}
+                placeholder="Describe the startup's core concept, unique value proposition, and innovation..."
+                value={editTeamIdea}
+                onChange={(e) => setEditTeamIdea(e.target.value)}
+                className="w-full rounded-md border border-white/15 bg-black/50 p-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
+                required
+              />
+            </div>
+
+            {/* Row: Detailed Problem & Solution */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-300">Problem Statement</label>
+                <textarea
+                  rows={2}
+                  placeholder="Market pain point or problem being addressed..."
+                  value={editTeamProblem}
+                  onChange={(e) => setEditTeamProblem(e.target.value)}
+                  className="w-full rounded-md border border-white/15 bg-black/50 p-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-300">Solution & Innovation</label>
+                <textarea
+                  rows={2}
+                  placeholder="Proprietary solution, technology, or service..."
+                  value={editTeamSolution}
+                  onChange={(e) => setEditTeamSolution(e.target.value)}
+                  className="w-full rounded-md border border-white/15 bg-black/50 p-2.5 text-xs text-white placeholder-zinc-500 outline-none focus:border-cyan-500"
+                />
+              </div>
+            </div>
+
+            {/* Financial Calibration & Share Valuation */}
+            <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/[0.04] p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" /> Financial Calibration & Valuation
+                </span>
+                <span className="text-[11px] font-mono text-zinc-400">Custom shares, asks & values</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Total Authorized Shares */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-zinc-300 flex items-center justify-between">
+                    <span>Total Shares</span>
+                    <span className="text-cyan-400 font-bold">{editTeamTotalShares?.toLocaleString("en-IN")}</span>
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={editTeamTotalShares}
+                    onChange={(e) => {
+                      const s = Number(e.target.value);
+                      setEditTeamTotalShares(s);
+                      if (editTeamSharePrice > 0) {
+                        setEditTeamValuation(s * editTeamSharePrice);
+                      }
+                    }}
+                    placeholder="e.g. 1000000"
+                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
+                    required
+                  />
+                </div>
+
+                {/* Share Value / Price */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-zinc-300 flex items-center justify-between">
+                    <span>Share Value (₹)</span>
+                    <span className="text-emerald-300 font-bold">{formatSharePrice(editTeamSharePrice)}</span>
+                  </label>
+                  <Input
+                    type="number"
+                    min={0.01}
+                    step="any"
+                    value={editTeamSharePrice}
+                    onChange={(e) => {
+                      const p = Number(e.target.value);
+                      setEditTeamSharePrice(p);
+                      if (editTeamTotalShares > 0) {
+                        setEditTeamValuation(editTeamTotalShares * p);
+                      }
+                    }}
+                    placeholder="e.g. 100"
+                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
+                    required
+                  />
+                </div>
+
+                {/* Total Valuation */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-zinc-300 flex items-center justify-between">
+                    <span>Valuation (₹)</span>
+                    <span className="text-cyan-300 font-bold">{formatINR(editTeamValuation)}</span>
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    step="any"
+                    value={editTeamValuation}
+                    onChange={(e) => setEditTeamValuation(Number(e.target.value))}
+                    placeholder="e.g. 100000000"
+                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
+                  />
+                </div>
+
+                {/* Funding Ask */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-zinc-300 flex items-center justify-between">
+                    <span>Funding Ask (₹)</span>
+                    <span className="text-amber-300 font-bold">{formatINR(editTeamAsk)}</span>
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={editTeamAsk}
+                    onChange={(e) => setEditTeamAsk(Number(e.target.value))}
+                    placeholder="e.g. 10000000"
+                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Equity Offered Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-zinc-300">
+                    Equity Offered (%)
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="any"
+                    value={editTeamEquity}
+                    onChange={(e) => setEditTeamEquity(Number(e.target.value))}
+                    placeholder="e.g. 10"
+                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-zinc-300">
+                    Pitch Deck Link (Optional)
+                  </label>
+                  <Input
+                    type="url"
+                    value={editTeamPitchDeckUrl}
+                    onChange={(e) => setEditTeamPitchDeckUrl(e.target.value)}
+                    placeholder="https://drive.google.com/..."
+                    className="bg-black/60 border-white/15 text-xs text-white font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Row 4: Founder and Stage Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-300">
+                  Founder / Lead Presenter <span className="text-zinc-500 font-normal">(Optional)</span>
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Rahul Sharma (CEO)"
+                  value={editTeamFounderName}
+                  onChange={(e) => setEditTeamFounderName(e.target.value)}
+                  className="bg-black/50 border-white/15 text-xs text-white"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-300">
+                  Current Stage Status <span className="text-rose-400">*</span>
+                </label>
+                <select
+                  value={editTeamStatus}
+                  onChange={(e) => setEditTeamStatus(e.target.value as IPOStatus)}
+                  className="flex h-9 w-full rounded-md border border-white/15 bg-black/50 px-3 py-1 text-xs font-mono text-white shadow-sm focus-visible:outline-none"
+                >
+                  <option value="IPO_OPEN">IPO LIVE (Immediately tradable on exchange)</option>
+                  <option value="PITCHING">PITCHING (Presenting on stage)</option>
+                  <option value="COMING_UP">COMING UP (Queued in roster)</option>
+                  <option value="IPO_PAUSED">IPO PAUSED (Trading frozen)</option>
+                  <option value="IPO_CLOSED">IPO CLOSED (Bidding concluded)</option>
+                </select>
+              </div>
+            </div>
+
+            <DialogFooter className="flex-col sm:flex-row gap-2 pt-3 border-t border-white/10">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditTeamModalOpen(false)}
+                className="font-mono text-xs border-white/20 text-zinc-300 hover:text-white"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isUpdatingTeam}
+                className="font-mono text-xs font-bold bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-400 hover:to-blue-400 shadow-lg shadow-cyan-500/20 gap-1.5"
+              >
+                {isUpdatingTeam ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Updating Team...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Save Changes
                   </>
                 )}
               </Button>

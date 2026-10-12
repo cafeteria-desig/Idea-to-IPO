@@ -330,8 +330,8 @@ export async function seedDatabase() {
       token: "739214",
       role: "RETAIL",
       status: "ACTIVE",
-      startingCapital: 500000, // ₹5 Lakhs
-      currentBalance: 500000,
+      startingCapital: 100000, // ₹1 Lakh
+      currentBalance: 100000,
       totalInvested: 0,
       isOnline: true,
     },
@@ -343,8 +343,8 @@ export async function seedDatabase() {
       token: "482051",
       role: "RETAIL",
       status: "ACTIVE",
-      startingCapital: 500000, // ₹5 Lakhs
-      currentBalance: 500000,
+      startingCapital: 100000, // ₹1 Lakh
+      currentBalance: 100000,
       totalInvested: 0,
       isOnline: false,
     },
@@ -356,8 +356,8 @@ export async function seedDatabase() {
       token: "915638",
       role: "RETAIL",
       status: "ACTIVE",
-      startingCapital: 500000, // ₹5 Lakhs
-      currentBalance: 500000,
+      startingCapital: 100000, // ₹1 Lakh
+      currentBalance: 100000,
       totalInvested: 0,
       isOnline: false,
     },

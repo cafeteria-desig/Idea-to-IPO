@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
       capitalAmount = Math.max(0, Number(startingCapital));
     } else {
       if (role === "FII") capitalAmount = 10000000; // 1 Cr
-      else if (role === "RETAIL") capitalAmount = 500000; // 5 Lakhs
+      else if (role === "RETAIL") capitalAmount = 100000; // 1 Lakh
       else capitalAmount = 0;
     }
 

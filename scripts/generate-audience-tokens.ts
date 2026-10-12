@@ -47,8 +47,8 @@ async function main() {
       token,
       role: "RETAIL",
       status: "ACTIVE",
-      startingCapital: 500000, // ₹5,00,000 (₹5 Lakhs)
-      currentBalance: 500000,
+      startingCapital: 100000, // ₹1,00,000 (₹1 Lakh)
+      currentBalance: 100000,
       totalInvested: 0,
       isOnline: false,
     });
@@ -65,8 +65,8 @@ async function main() {
         token: record.token,
         role: "RETAIL",
         status: "ACTIVE",
-        startingCapital: 500000,
-        currentBalance: 500000,
+        startingCapital: 100000,
+        currentBalance: 100000,
       },
       create: record,
     });
@@ -102,7 +102,7 @@ async function main() {
     "Audience Identifier": u.name,
     "6-Digit Passkey Token": u.token || "N/A",
     "Assigned Role": "Audience / Retail",
-    "Starting Capital": "₹5,00,000",
+    "Starting Capital": "₹1,00,000",
     "Current Balance": `₹${u.currentBalance.toLocaleString("en-IN")}`,
     "Email ID": u.email,
     "Login URL": "https://valve-brave-learned-calling.trycloudflare.com",
